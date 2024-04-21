@@ -113,9 +113,7 @@ function App() {
       }
 
       newNote = orderedNoteIds[currentIndex + 1]
-      console.log('new note=', newNote)
       while (isEndOfTie(mei, newNote) && currentIndex < orderedNoteIds.length - 1) {
-        console.log('is end of tie!', newNote, isEndOfTie(mei, newNote))
         currentIndex += 1
         newNote = orderedNoteIds[currentIndex + 1]
       }
@@ -126,14 +124,11 @@ function App() {
     setTimeout(() => {
       document.querySelector(`#${newNote} use`)?.setAttribute('fill', 'red')
 
-      console.log('in timeout', newNote, newNote)
       if (!vrvToolkit) return
       if (!newNote) return
 
       const midiValues = vrvToolkit.getMIDIValuesForElement(newNote!)
-      playSingleNote({
-        hasPitch: midiValues.pitch
-      })
+      playSingleNote(midiValues.pitch, 800)
     }, 800)
   }, [mei, currentScoreNote, timemap, playSingleNote, vrvToolkit])
 
@@ -245,9 +240,11 @@ function App() {
             file={midi}
             height={500}
             toSVG={toSVG}
+            searchPitch={currentScoreNote && vrvToolkit?.getMIDIValuesForElement(currentScoreNote).pitch || undefined}
             onClick={(note: MidiNote) => {
               setClickedMidiNote(note)
             }}
+            onHover={(note: MidiNote) => playSingleNote(note.pitch, 150, 0.15)}
           />)}
       </div>
 

@@ -124,9 +124,7 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
                 const id = note.getAttribute('id')
                 if (!id) return
 
-                playSingleNote({
-                    hasPitch: vrvToolkit.getMIDIValuesForElement(id).pitch
-                })
+                playSingleNote(vrvToolkit.getMIDIValuesForElement(id).pitch)
                 onClick(id)
             })
         })

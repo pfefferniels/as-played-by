@@ -21,18 +21,17 @@ export const PianoContextProvider = ({ children }: PianoContextProviderProps) =>
       velocities: 1,
     });
 
-    initializedPiano.toDestination();
-
     (async () => {
       await initializedPiano.load();
     })();
 
-    return initializedPiano;
+    return initializedPiano.toDestination();
   });
 
   useEffect(() => {
     return () => {
       // Clean up piano resources when the component unmounts
+      piano.disconnect()
     };
   }, [piano]);
 
@@ -56,16 +55,16 @@ export const usePiano = () => {
 
     for (const note of notes) {
       Tone.Transport.schedule(() => {
-        piano.keyDown({
-          note: note.pitch.toString(),
-          velocity: note.velocity, // scale to [0,1]
-        });
+        // piano.keyDown({
+        //   note: note.pitch.toString(),
+        //   velocity: note.velocity, // scale to [0,1]
+        // });
       }, note.onsetMs / 1000);
 
       Tone.Transport.schedule(() => {
-        piano.keyUp({
-          note: note.pitch.toString()
-        })
+        // piano.keyUp({
+        //   note: note.pitch.toString()
+        // })
       }, note.offsetMs / 1000);
     }
 
@@ -79,12 +78,24 @@ export const usePiano = () => {
   const stopAll = () => {
     // console.log('stop all')
     // Tone.Transport.stop()
-    piano.stopAll()
+    // piano.stopAll()
   }
 
-  const playSingleNote = (note: { hasPitch: number }) => {
-    const mono = new Tone.MonoSynth().toDestination();
-    mono.triggerAttackRelease(Tone.Midi(note.hasPitch).toNote(), "+0.5", "0");
+  const playSingleNote = (pitch: number, durationMs: number = 500, velocity?: number) => {
+    if (!piano) return
+    piano.toDestination();
+    piano.keyDown({
+      note: pitch.toString(),
+      velocity
+    })
+
+    // calling piano.keyUp() directly with the time parameter set to 0.5
+    // will make the piano stop completely (for unknown reasons ...)
+    setTimeout(() => {
+      piano.keyUp({
+        note: pitch.toString()
+      })
+    }, durationMs)
   };
 
   return {
