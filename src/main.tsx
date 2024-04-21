@@ -2,9 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { PianoContextProvider } from './lib/midi-player/usePiano.tsx'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <PianoContextProvider>
+      <App />
+    </PianoContextProvider>
   </React.StrictMode>,
 )

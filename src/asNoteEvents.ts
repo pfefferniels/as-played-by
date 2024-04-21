@@ -3,7 +3,7 @@
 import { loadVerovio } from "./loadVerovio.mts";
 import { Midi } from 'tonal'
 
-const findDenominator = function (dec: number) {
+const findDenominator = (dec: number) => {
     dec = Math.abs(dec);
     let done = false;
     let num = 0;

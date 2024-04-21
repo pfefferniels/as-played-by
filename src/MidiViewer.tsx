@@ -1,6 +1,7 @@
 import { MidiFile } from "midifile-ts";
 import { useEffect, useState } from "react";
 import { MidiNote, asNotes } from "./MidiNote";
+import { usePiano } from "./lib/midi-player/usePiano";
 
 export type Point = [number, number]
 
@@ -12,6 +13,7 @@ interface MidiViewerProps {
 }
 
 export const MidiViewer = ({ file, toSVG, onClick, height }: MidiViewerProps) => {
+    const { playSingleNote } = usePiano()
     const [notes, setNotes] = useState<MidiNote[]>([])
 
     useEffect(() => {
@@ -35,7 +37,12 @@ export const MidiViewer = ({ file, toSVG, onClick, height }: MidiViewerProps) =>
                         y={point1[1]}
                         width={point2[0] - point1[0]}
                         height={5}
-                        onClick={() => onClick(note)} />
+                        onClick={() => {
+                            playSingleNote({
+                                hasPitch: note.pitch
+                            })
+                            onClick(note)
+                        }} />
                 )
             })}
         </svg>

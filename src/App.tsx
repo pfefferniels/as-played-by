@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { MidiFile, read } from 'midifile-ts';
 import { MidiViewer } from './MidiViewer';
-import { MidiNote, asNotes } from "./MidiNote";
+import { MidiNote } from "./MidiNote";
 import { AlignedMEI } from './AlignedMEI';
-import { align } from 'alignmenttool';
-import { asNoteEvents } from './asNoteEvents';
+import { usePiano } from './lib/midi-player/usePiano';
+import { loadVerovio } from './loadVerovio.mts';
+import { TimeMapEntry } from 'verovio';
+import { VerovioToolkit } from 'verovio/esm';
+
+const isEndOfTie = (mei: Document, noteId: string) => {
+  return mei.querySelector(`tie[endid="#${noteId}"]`)
+}
 
 const removeAllWhen = (mei: Document) => {
   mei.querySelectorAll('when').forEach(when => when.remove())
@@ -57,48 +63,79 @@ const insertWhen = (newMEI: Document, clickedMidiNote: MidiNote, clickedScoreNot
 }
 
 function App() {
+  const { playSingleNote } = usePiano()
   const [mei, setMEI] = useState<Document>();
   const [midi, setMIDI] = useState<MidiFile>();
 
-  const [clickedScoreNote, setClickedScoreNote] = useState<string>()
+  const [timemap, setTimemap] = useState<TimeMapEntry[]>([])
+  const [vrvToolkit, setVrvToolkit] = useState<VerovioToolkit>()
+  const [currentScoreNote, setCurrentScoreNote] = useState<string>()
   const [clickedMidiNote, setClickedMidiNote] = useState<MidiNote>()
 
   const [stretchFactor, setStretchFactor] = useState<number>(0.1);
 
-  const alignAll = async () => {
+  const alignAndUpdate = useCallback((scoreNote: string, midiNote: MidiNote) => {
     if (!midi || !mei) {
       console.log('Both, MIDI and MEI must be present for aligning')
       return
     }
 
-    const noteEvents = await asNoteEvents(mei)
-    const midiEvents = asNotes(midi)
-
-    const matches = await align(midiEvents.map((note) => {
-      return {
-        id: note.id,
-        onset: note.onsetMs / 1000,
-        offset: note.offsetMs / 1000,
-        pitch: note.pitch,
-        channel: note.channel,
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }), noteEvents, 0.1, 4) as any
+    if (!scoreNote || !midiNote) return
 
     const newMEI = new DOMParser().parseFromString(new XMLSerializer().serializeToString(mei), 'application/xml')
-    for (let i = 0; i < matches.size(); i++) {
-      const scoreId = matches.get(i).scoreId
-      const midiId = matches.get(i).midiId
+    insertWhen(newMEI, midiNote, scoreNote)
+    setMEI(newMEI)
+  }, [mei, midi])
 
-      const midiNote = midiEvents.find(event => event.id === midiId)
-      if (!midiNote || scoreId === '*') {
-        continue
+  const proceedToNextNote = useCallback(() => {
+    if (!mei) return
+
+    if (!timemap.length) {
+      console.log('No timemap ready yet')
+      return
+    }
+
+    let newNote
+    if (!currentScoreNote) {
+      newNote = timemap[0].on![0]
+    }
+    else {
+      const orderedNoteIds = timemap
+        .map(entry => entry.on)
+        .flat()
+        .filter(entry => entry !== undefined) as string[]
+
+      console.log('current score note', currentScoreNote, 'in', orderedNoteIds)
+
+      let currentIndex = orderedNoteIds.findIndex(id => id === currentScoreNote)
+      if (currentIndex === -1 || currentIndex === orderedNoteIds.length - 1) {
+        return
       }
 
-      insertWhen(newMEI, midiNote, scoreId)
+      newNote = orderedNoteIds[currentIndex + 1]
+      console.log('new note=', newNote)
+      while (isEndOfTie(mei, newNote) && currentIndex < orderedNoteIds.length - 1) {
+        console.log('is end of tie!', newNote, isEndOfTie(mei, newNote))
+        currentIndex += 1
+        newNote = orderedNoteIds[currentIndex + 1]
+      }
     }
-    setMEI(newMEI)
-  }
+
+    setCurrentScoreNote(newNote)
+
+    setTimeout(() => {
+      document.querySelector(`#${newNote} use`)?.setAttribute('fill', 'red')
+
+      console.log('in timeout', newNote, newNote)
+      if (!vrvToolkit) return
+      if (!newNote) return
+
+      const midiValues = vrvToolkit.getMIDIValuesForElement(newNote!)
+      playSingleNote({
+        hasPitch: midiValues.pitch
+      })
+    }, 800)
+  }, [mei, currentScoreNote, timemap, playSingleNote, vrvToolkit])
 
   const handleMEI = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !event.target.files.length) return;
@@ -110,12 +147,19 @@ function App() {
     reader.onload = async (e) => {
       if (!e.target || !e.target.result) return;
 
-      //const tk = await loadVerovio()
+      //
       //tk.loadData(e.target.result as string)
       //const meiWithIds = tk.getMEI()
       const meiWithIds = e.target.result as string
 
       setMEI(new DOMParser().parseFromString(meiWithIds, 'application/xml'))
+
+      const tk = await loadVerovio()
+      tk.loadData(meiWithIds)
+      const newTimemap = tk.renderToTimemap()
+      tk.renderToMIDI()
+      setTimemap(newTimemap)
+      setVrvToolkit(tk)
     };
     reader.readAsText(file);
   };
@@ -140,20 +184,14 @@ function App() {
   };
 
   useEffect(() => {
-    if (!clickedMidiNote || !clickedScoreNote) return
+    if (!clickedMidiNote || !currentScoreNote) return
 
-    setMEI(mei => {
-      if (!mei) return
-
-      // TODO: this is dumb
-      const newMEI = new DOMParser().parseFromString(new XMLSerializer().serializeToString(mei), 'application/xml')
-      insertWhen(newMEI, clickedMidiNote, clickedScoreNote)
-      return newMEI
-    })
+    alignAndUpdate(currentScoreNote, clickedMidiNote)
 
     setClickedMidiNote(undefined)
-    setClickedScoreNote(undefined)
-  }, [clickedMidiNote, clickedScoreNote])
+    proceedToNextNote()
+  }, [clickedMidiNote, currentScoreNote, alignAndUpdate, proceedToNextNote])
+
 
   const downloadMEI = () => {
     if (!mei) return;
@@ -194,12 +232,12 @@ function App() {
       <input type="file" id="midi-file" accept=".midi,.mid" onChange={handleMIDI} />
       <br />
 
-      <input type="range" min="0.05" max="0.2" step="0.01" value={stretchFactor} onChange={handleStretchChange} />
+      <input type="range" min="0.01" max="0.2" step="0.01" value={stretchFactor} onChange={handleStretchChange} />
       <label>Adjust Horizontal Stretch: {stretchFactor.toFixed(2)}</label>
       <br />
       <button onClick={downloadMEI}>Download Aligned MEI</button>
-      <button onClick={alignAll}>Align All</button>
       <button onClick={clear}>Clear</button>
+      <button onClick={proceedToNextNote}>Proceed</button>
 
       <div style={{ width: '90vw', overflow: 'scroll' }}>
         {midi && (
@@ -216,7 +254,7 @@ function App() {
       {mei && (
         <AlignedMEI
           mei={mei}
-          onClick={(id) => setClickedScoreNote(id)}
+          onClick={(id) => setCurrentScoreNote(id)}
           toSVG={toSVG} />)}
 
       <br />
