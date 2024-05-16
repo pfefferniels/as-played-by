@@ -84,3 +84,7 @@ button:focus-visible {
 .beam>polygon {
   display: none;
 }*/
+
+.accid {
+  display: none;
+}

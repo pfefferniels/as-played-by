@@ -20,23 +20,30 @@ export interface MidiNote {
 
     onsetMs: number;
     offsetMs: number;
+
+    link?: string
 }
 
-export const asNotes = (file: MidiFile) => {
+export const asNotes = (file: MidiFile, readLinks = false) => {
     type Tempo = { atTick: number; microsecondsPerBeat: number; };
     const tempoMap: Tempo[] = [];
     const newNotes = [];
     const currentNotes: MidiNote[] = [];
+    let bufferedMetaText
     for (let i = 0; i < file.tracks.length; i++) {
         const track = file.tracks[i];
         let currentTime = 0;
         for (const event of track) {
             currentTime += event.deltaTime;
             if (event.type === 'meta' && event.subtype === 'setTempo') {
+                // console.log('set tempo to', event.microsecondsPerBeat)
                 tempoMap.push({
                     atTick: currentTime,
                     microsecondsPerBeat: event.microsecondsPerBeat
                 });
+            }
+            if (readLinks && event.type === 'meta' && event.subtype === 'text') {
+                bufferedMetaText = event.text
             }
             else if (event.type === 'channel' && event.subtype === 'noteOn') {
                 const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);
@@ -52,8 +59,10 @@ export const asNotes = (file: MidiFile) => {
                     pitch: event.noteNumber,
                     channel: i,
                     onsetMs: midiTickToMilliseconds(currentTime, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat),
-                    offsetMs: 0
+                    offsetMs: 0,
+                    link: bufferedMetaText
                 });
+                bufferedMetaText = undefined
             }
             else if (event.type === 'channel' && event.subtype === 'noteOff') {
                 const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);

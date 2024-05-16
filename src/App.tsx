@@ -37,7 +37,7 @@ const insertWhen = (newMEI: Document, clickedMidiNote: MidiNote, clickedScoreNot
 
   when.setAttribute('absolute', clickedMidiNote.onsetMs.toFixed(0) + 'ms')
   when.setAttribute('abstype', 'smil')
-  when.setAttribute('corresp', clickedMidiNote.id)
+  when.setAttribute('corresp', clickedMidiNote.link || clickedMidiNote.id)
   when.setAttribute('data', '#' + clickedScoreNote)
 
   const velocity = newMEI.createElementNS('http://www.music-encoding.org/ns/mei', 'extData')

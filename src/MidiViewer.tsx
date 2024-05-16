@@ -1,5 +1,5 @@
 import { MidiFile } from "midifile-ts";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MidiNote, asNotes } from "./MidiNote";
 import { usePiano } from "./lib/midi-player/usePiano";
 
@@ -47,7 +47,7 @@ export const MidiViewer = ({ file, toSVG, onClick, onHover, height, searchPitch 
     }, [samePitchPositions])
 
     useEffect(() => {
-        setNotes(asNotes(file))
+        setNotes(asNotes(file, true))
     }, [file])
 
     const lastPoint = toSVG([notes[notes.length - 1]?.offsetMs || 0, 0])
