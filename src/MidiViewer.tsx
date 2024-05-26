@@ -1,7 +1,7 @@
 import { MidiFile } from "midifile-ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MidiNote, asNotes } from "./MidiNote";
-import { usePiano } from "./lib/midi-player/usePiano";
+import { usePiano } from "react-pianosound"
 
 export type Point = [number, number]
 

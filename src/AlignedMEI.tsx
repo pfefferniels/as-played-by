@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect } from "react";
 import { VerovioToolkit } from "verovio/esm";
 import { loadVerovio } from "./loadVerovio.mts";
-import { usePiano } from "./lib/midi-player/usePiano";
+import { usePiano } from "react-pianosound";
 
 function convertRange(value: number, r1: [number, number], r2: [number, number]) {
     return (value - r1[0]) * (r2[1] - r2[0]) / (r1[1] - r1[0]) + r2[0];
@@ -214,7 +214,7 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
         redoBeams();
         redoTies();
         redoBarLines(mei);
-    }, [svg, onClick, mei, toSVG, vrvToolkit])
+    }, [svg, onClick, mei, toSVG, vrvToolkit, playSingleNote])
 
     useEffect(() => {
         if (!vrvToolkit) return

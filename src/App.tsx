@@ -4,7 +4,7 @@ import { MidiFile, read } from 'midifile-ts';
 import { MidiViewer } from './MidiViewer';
 import { MidiNote } from "./MidiNote";
 import { AlignedMEI } from './AlignedMEI';
-import { usePiano } from './lib/midi-player/usePiano';
+import { usePiano } from 'react-pianosound'
 import { loadVerovio } from './loadVerovio.mts';
 import { TimeMapEntry } from 'verovio';
 import { VerovioToolkit } from 'verovio/esm';
