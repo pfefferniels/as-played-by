@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { VerovioToolkit } from "verovio/esm";
 import { loadVerovio } from "./loadVerovio.mts";
 import { usePiano } from "react-pianosound";
+import { ScoreEvent } from "./ScoreEvents";
 
 function convertRange(value: number, r1: [number, number], r2: [number, number]) {
     return (value - r1[0]) * (r2[1] - r2[0]) / (r1[1] - r1[0]) + r2[0];
@@ -59,11 +60,14 @@ const shiftStem = (note: Element, newX: number) => {
     stem.setAttribute('d', `M${newX - shift} ${y1} L${newX - shift} ${y2}`)
 }
 
-const shiftNote = (note: Element, newX: number, storeOriginal: boolean = false) => {
+const shiftNote = (note: Element, newX: number) => {
     const use = note.querySelector('use')
     if (!use) return
 
-    if (storeOriginal) use.setAttribute('data-original', use.getAttribute('x') || '0')
+    if (note.hasAttribute('data-original')) {
+        console.log('shifting twice ...')
+    }
+
     use.setAttribute('x', newX.toString())
 }
 
@@ -96,8 +100,8 @@ const tiedNoteOf = (note: Element) => {
 
 interface AlignedMEIProps {
     mei: Document
-    onClick: (id: string) => void
     toSVG: (point: [number, number]) => [number, number]
+    highlight?: ScoreEvent
 }
 
 const changeOpacity = (note: Element, newValue: number, originalRange: [number, number] = [30, 50]) => {
@@ -107,7 +111,7 @@ const changeOpacity = (note: Element, newValue: number, originalRange: [number, 
     })
 }
 
-export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
+export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
     const { playSingleNote } = usePiano()
     const [vrvToolkit, setVrvToolkit] = useState<VerovioToolkit>();
     const [svg, setSVG] = useState<string>('');
@@ -119,17 +123,14 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
     useLayoutEffect(() => {
         if (!vrvToolkit) return
 
-        document.querySelectorAll('.note').forEach(note => {
-            note.addEventListener('click', () => {
-                const id = note.getAttribute('id')
-                if (!id) return
-
-                playSingleNote(vrvToolkit.getMIDIValuesForElement(id).pitch)
-                onClick(id)
-            })
-        })
-
         addShiftInfo()
+
+        if (highlight) {
+            const el = document.querySelector(`#${highlight.id}`)
+            if (el) {
+                el.setAttribute('fill', 'red')
+            }
+        }
 
         const svg = document.querySelector('#scoreDiv svg')
         if (svg) {
@@ -167,8 +168,10 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
 
                 // set the X position based on the onset time and
                 // store the original value.
-                const newX = (toSVG([+onsetTime, 0])[0] * 20)
-                shiftNote(note, newX, true)
+                const newX = toSVG([+onsetTime, 0])[0] * 20
+                shiftNote(note, newX)
+                note.querySelector('use')?.setAttribute('data-original', use.getAttribute('x') || '0')                // console.log(onsetTime, '=>', newX)
+                note.setAttribute('data-onset', onsetTime.toString())
                 shiftStem(note, newX)
 
                 // Move the second note of a tie and set its
@@ -202,11 +205,22 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
             const unshiftedNotes = document.querySelectorAll(`.note use:not([data-original])`)
             for (const unshiftedNoteUse of unshiftedNotes) {
                 const unshiftedNote = unshiftedNoteUse.closest('.note')!
+                // console.log('unshifted note', unshiftedNoteUse)
+                if (unshiftedNote.getAttribute('id') === 'nccsrf2') {
+                    console.log('encountered 2',
+                        unshiftedNote.getAttribute('data-onset'),
+                        unshiftedNote.querySelector('use')?.getAttribute('x'))
+                        unshiftedNote.querySelector('use')?.getAttribute('data-original')
+                }
 
                 const x = +(unshiftedNoteUse.getAttribute('x') || 0)
                 const newX = shift + x
 
-                shiftNote(unshiftedNote, newX, false)
+                console.log(unshiftedNote.getAttribute('data-onset'))
+
+                console.log('shifting', unshiftedNote, 'further by', newX)
+
+                shiftNote(unshiftedNote, newX)
                 shiftStem(unshiftedNote, newX)
             }
         }
@@ -214,7 +228,7 @@ export const AlignedMEI = ({ mei, onClick, toSVG }: AlignedMEIProps) => {
         redoBeams();
         redoTies();
         redoBarLines(mei);
-    }, [svg, onClick, mei, toSVG, vrvToolkit, playSingleNote])
+    }, [svg, mei, toSVG, vrvToolkit, playSingleNote])
 
     useEffect(() => {
         if (!vrvToolkit) return
