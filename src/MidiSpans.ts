@@ -32,17 +32,8 @@ const isSoftPedalOff = (event: AnyEvent) => {
 }
 
 export function midiTickToMilliseconds(ticks: number, microsecondsPerBeat: number, ppq: number): number {
-    // Calculate how many beats the given number of ticks represent
     const beats = ticks / ppq;
-
-    console.log('beats=', beats)
-
-    // Convert beats to milliseconds
-    const milliseconds = (beats * microsecondsPerBeat) / 1000;
-
-    console.log('milliseconds=', milliseconds)
-
-    return milliseconds;
+    return (beats * microsecondsPerBeat) / 1000;
 }
 
 interface Span<T extends string> {
@@ -145,7 +136,7 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
                         ? currentSpans.find(e => e.type === 'note' && e.pitch === (event as NoteOffEvent).noteNumber)
                         : currentSpans.find(e => e.type === type)
                 if (!counterpart) {
-                    console.log('Found an off event without a previous on.');
+                    console.log('Found an off event of type', type, 'at', currentTime, 'without a previous on.', 'Event:', event, 'Current spans: ', currentSpans.map(span => span.type).join(' '));
                     continue;
                 }
                 counterpart.offset = currentTime;
@@ -160,6 +151,7 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
     }
 
     const sorted = resultingSpans.sort((a, b) => a.onset - b.onset);
-    // console.log('sorted=', sorted)
+
+    console.log(sorted.length, 'events within [', sorted[0].onset, sorted[sorted.length - 1].onset, ']')
     return sorted
 };

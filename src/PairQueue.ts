@@ -5,10 +5,10 @@ export class PairQueue {
     scoreEvents: ScoreEvent[] = []
     midiEvents: AnySpan[] = []
 
+    alignedPairs: [ScoreEvent, AnySpan][] = []
+
     get nextPair(): [ScoreEvent, AnySpan] | null {
         if (this.scoreEvents.length === 0 || this.midiEvents.length === 0) return null
-
-        console.log('next pair from', this.scoreEvents, this.midiEvents)
 
         const reference = this.midiEvents.shift()!
         const corresp =
@@ -20,7 +20,10 @@ export class PairQueue {
 
         this.scoreEvents.splice(this.scoreEvents.indexOf(corresp), 1)
 
-        return [corresp, reference]
+        const pair: [ScoreEvent, AnySpan] = [corresp, reference]
+        this.alignedPairs.push(pair)
+
+        return pair
     }
 
     ignoreScoreEvent() {

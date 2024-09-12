@@ -2,25 +2,25 @@ import { useCallback, useRef, useState } from 'react';
 import './App.css';
 import { MidiFile, read } from 'midifile-ts';
 import { MidiViewer } from './MidiViewer';
-import { AnySpan, asSpans } from "./MidiSpans";
+import { AnySpan, asSpans, NoteSpan, SoftSpan, SustainSpan } from "./MidiSpans";
 import { AlignedMEI } from './AlignedMEI';
 import { loadVerovio } from './loadVerovio.mts';
 import { prepareScoreEvents, ScoreEvent } from './ScoreEvents';
 import { PairQueue } from './PairQueue';
-import { insertWhen, removeAllWhen } from './When';
+import { insertWhen, removeAllPedals, removeAllWhen } from './When';
 import { usePiano } from 'react-pianosound';
+import { insertPedals } from './insertPedals';
 
 function App() {
   const { playSingleNote } = usePiano()
   const [mei, setMEI] = useState<Document>();
   const [midi, setMIDI] = useState<MidiFile>();
 
-  // const [vrvToolkit, setVrvToolkit] = useState<VerovioToolkit>()
-
   const [currentScoreEvent, setCurrentScoreEvent] = useState<ScoreEvent>()
   const [currentMidiSpan, setCurrentMidiSpan] = useState<AnySpan>()
 
   const queue = useRef<PairQueue>(new PairQueue())
+  const pedals = useRef<(SustainSpan | SoftSpan)[]>([])
 
   const [stretchFactor, setStretchFactor] = useState<number>(0.1);
 
@@ -88,7 +88,9 @@ function App() {
       const newMIDI = read(binaryData as ArrayBuffer)
       setMIDI(newMIDI);
 
-      queue.current.midiEvents = asSpans(newMIDI, true)
+      const allSpans = asSpans(newMIDI, true)
+      queue.current.midiEvents = allSpans.filter(span => span.type === 'note')
+      pedals.current = allSpans.filter(span => span.type === 'sustain' || span.type === 'soft')
     };
 
     reader.readAsArrayBuffer(file);
@@ -121,7 +123,27 @@ function App() {
     setMEI(newMEI)
   }
 
+  const clearPedals = () => {
+    if (!mei) return
+    const newMEI = new DOMParser().parseFromString(new XMLSerializer().serializeToString(mei), 'application/xml')
+    removeAllPedals(newMEI)
+    setMEI(newMEI)
+  }
 
+  const handleInsertPedals = () => {
+    if (!mei) {
+      console.log('Cannot insert pedals when there is no MEI yet')
+      return
+    }
+
+    const newMEI = new DOMParser().parseFromString(new XMLSerializer().serializeToString(mei), 'application/xml')
+    insertPedals(
+      pedals.current,
+      queue.current.alignedPairs.filter(p => p[1].type === 'note') as [ScoreEvent, NoteSpan][],
+      newMEI
+    )
+    setMEI(newMEI)
+  }
 
   const toSVG = ([a, b]: [number, number]) => [(a - 100) * stretchFactor, (110 - b) * 5] as [number, number]
 
@@ -147,6 +169,8 @@ function App() {
         <button onClick={clear}>Clear</button>
         <button onClick={proceedToNextPair}>⇒ Proceed</button>
         <button onClick={() => queue.current.ignoreScoreEvent()}>Ignore Score Event</button>
+        <button onClick={handleInsertPedals}>Insert Pedals</button>
+        <button onClick={clearPedals}>Clear Pedals</button>
       </div>
 
       <div style={{ width: '90vw', overflow: 'scroll' }}>

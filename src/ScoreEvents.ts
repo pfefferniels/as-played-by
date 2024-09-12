@@ -12,7 +12,7 @@ const isEndOfTie = (mei: Document, noteId: string) => {
 }
 
 
-export const prepareScoreEvents = (mei: Document, vrvToolkit: VerovioToolkit) => {
+export const prepareScoreEvents = (mei: Document, vrvToolkit: VerovioToolkit, ignorePedals = true) => {
     const timemap = vrvToolkit.renderToTimemap({ includeRests: true })
 
     let orderedScoreEvents: ScoreEvent[] = []
@@ -36,35 +36,37 @@ export const prepareScoreEvents = (mei: Document, vrvToolkit: VerovioToolkit) =>
         for (const id of entry.restsOn) {
             orderedScoreEvents.push({
                 type: 'rest',
-                tstamp: entry.tstamp, 
+                tstamp: entry.tstamp,
                 id
             })
         }
     }
 
-    const pedals = mei.querySelectorAll('pedal')
-    for (const pedal of pedals) {
-        const startid = pedal.getAttribute('startid')
-        if (!startid) {
-            console.log('Pedal without startid found', pedal)
-            continue
-        }
-
-        let correspTstamp = orderedScoreEvents.find(e => e.id === startid.slice(1))?.tstamp
-        if (!correspTstamp) {
-            // Maybe a rest?
-            correspTstamp = vrvToolkit.getTimesForElement(startid.slice(1))?.scoreTimeOnset
-            if (!correspTstamp) {
-                console.log('No corresponding element found for', startid)
+    if (!ignorePedals) {
+        const pedals = mei.querySelectorAll('pedal')
+        for (const pedal of pedals) {
+            const startid = pedal.getAttribute('startid')
+            if (!startid) {
+                console.log('Pedal without startid found', pedal)
                 continue
             }
-        }
 
-        orderedScoreEvents.push({
-            id: pedal.getAttribute('xml:id') || Math.random().toString(),
-            type: (pedal.getAttribute('func') || 'sustain') as 'sustain' | 'soft',
-            tstamp: correspTstamp,
-        })
+            let correspTstamp = orderedScoreEvents.find(e => e.id === startid.slice(1))?.tstamp
+            if (!correspTstamp) {
+                // Maybe a rest?
+                correspTstamp = vrvToolkit.getTimesForElement(startid.slice(1))?.scoreTimeOnset
+                if (!correspTstamp) {
+                    console.log('No corresponding element found for', startid)
+                    continue
+                }
+            }
+
+            orderedScoreEvents.push({
+                id: pedal.getAttribute('xml:id') || Math.random().toString(),
+                type: (pedal.getAttribute('func') || 'sustain') as 'sustain' | 'soft',
+                tstamp: correspTstamp,
+            })
+        }
     }
 
     orderedScoreEvents = orderedScoreEvents

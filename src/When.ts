@@ -3,6 +3,11 @@ import { AnySpan } from "./MidiSpans";
 export const removeAllWhen = (mei: Document) => {
   mei.querySelectorAll('when').forEach(when => when.remove());
 };
+
+export const removeAllPedals = (mei: Document) => {
+  mei.querySelectorAll('pedal').forEach(pedal => pedal.remove());
+}
+
 export const insertWhen = (newMEI: Document, clickedMidiSpan: AnySpan, clickedScoreNote: string) => {
   let recording = newMEI.querySelector('recording');
   if (!recording) {
@@ -49,3 +54,5 @@ export const insertWhen = (newMEI: Document, clickedMidiSpan: AnySpan, clickedSc
   when.appendChild(onsetTicks);
   when.appendChild(durationTicks);
 };
+
+
