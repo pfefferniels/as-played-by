@@ -22,7 +22,8 @@ export const MidiViewer = ({ file, toSVG, height, highlight }: MidiViewerProps) 
         setSpans(asSpans(file, true))
     }, [file])
 
-    const lastPoint = toSVG([spans[spans.length - 1]?.offsetMs || 0, 0])
+    const lastOffsetMs = Math.max(...spans.map(span => span.offsetMs))
+    const lastPoint = toSVG([lastOffsetMs || 0, 0])
 
     return (
         <svg width={lastPoint[0] + 100} height={height} ref={svgRef}>

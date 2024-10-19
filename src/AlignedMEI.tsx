@@ -2,11 +2,11 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { VerovioToolkit } from "verovio/esm";
 import { loadVerovio } from "./loadVerovio.mts";
 import { usePiano } from "react-pianosound";
-import { ScoreEvent } from "./ScoreEvents";
+import { AnySpan } from "./MidiSpans";
 
-function convertRange(value: number, r1: [number, number], r2: [number, number]) {
-    return (value - r1[0]) * (r2[1] - r2[0]) / (r1[1] - r1[0]) + r2[0];
-}
+// function convertRange(value: number, r1: [number, number], r2: [number, number]) {
+//     return (value - r1[0]) * (r2[1] - r2[0]) / (r1[1] - r1[0]) + r2[0];
+// }
 
 const addShiftInfo = () => {
     document.querySelectorAll('.stem path, .accid path, .flag path').forEach(el_ => {
@@ -26,7 +26,7 @@ const addShiftInfo = () => {
     })
 }
 
-const shiftStem = (note: Element, newX: number) => {
+const shiftStem = (note: SVGElement, newX: number) => {
     let stem = note.querySelector('.stem path')
     if (!stem && note.closest('.chord')) {
         // we might be dealing with a chord: 
@@ -60,7 +60,7 @@ const shiftStem = (note: Element, newX: number) => {
     stem.setAttribute('d', `M${newX - shift} ${y1} L${newX - shift} ${y2}`)
 }
 
-const shiftNote = (note: Element, newX: number) => {
+const shiftNote = (note: SVGElement, newX: number) => {
     const use = note.querySelector('use')
     if (!use) return
 
@@ -71,7 +71,7 @@ const shiftNote = (note: Element, newX: number) => {
     use.setAttribute('x', newX.toString())
 }
 
-const tiedNoteOf = (note: Element) => {
+const tiedNoteOf = (note: SVGElement) => {
     const id = note.getAttribute('id')
     const tie = document.querySelector(`.tie[data-startid="#${id}"]`)
     console.log('tie', tie)
@@ -83,7 +83,7 @@ const tiedNoteOf = (note: Element) => {
     console.log('endid', endid)
     if (!endid) return null
 
-    return document.querySelector(endid)
+    return document.querySelector(endid) as SVGElement | null
 }
 
 //const shiftFlag = (flag: Element, newX: number) => {
@@ -98,20 +98,21 @@ const tiedNoteOf = (note: Element) => {
 //    stem.setAttribute('d', `M${newX - shift} ${y1} L${newX - shift} ${y2}`)
 //}
 
+// const changeOpacity = (note: SVGElement, newValue: number, originalRange: [number, number] = [30, 50]) => {
+//     note.querySelectorAll('use,path').forEach(path => {
+//         path.setAttribute('fill-opacity', convertRange(+newValue, originalRange, [0.2, 1]).toString())
+//         path.setAttribute('stroke-opacity', convertRange(+newValue, originalRange, [0.2, 1]).toString())
+//     })
+// }
+
 interface AlignedMEIProps {
-    mei: Document
+    mei: string
+    getSpanForNote: (id: string) => AnySpan | undefined
     toSVG: (point: [number, number]) => [number, number]
-    highlight?: ScoreEvent
+    highlight?: string
 }
 
-const changeOpacity = (note: Element, newValue: number, originalRange: [number, number] = [30, 50]) => {
-    note.querySelectorAll('use,path').forEach(path => {
-        path.setAttribute('fill-opacity', convertRange(+newValue, originalRange, [0.2, 1]).toString())
-        path.setAttribute('stroke-opacity', convertRange(+newValue, originalRange, [0.2, 1]).toString())
-    })
-}
-
-export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
+export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight }: AlignedMEIProps) => {
     const { playSingleNote } = usePiano()
     const [vrvToolkit, setVrvToolkit] = useState<VerovioToolkit>();
     const [svg, setSVG] = useState<string>('');
@@ -126,70 +127,63 @@ export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
         addShiftInfo()
 
         if (highlight) {
-            const el = document.querySelector(`#${highlight.id}`)
+            const el = document.querySelector(`#${highlight}`)
             if (el) {
                 el.setAttribute('fill', 'red')
             }
         }
 
-        const svg = document.querySelector('#scoreDiv svg')
+        const svg = document.querySelector('#scoreDiv svg') as SVGElement
         if (svg) {
             const width = svg.getAttribute('viewBox')?.split(' ')[2]
             svg.setAttribute('width', width ? (+width / 2.5).toString() : '2000')
         }
 
-        // TODO: displace notes based on <when> elements
-        const whens = mei.querySelectorAll('when')
-        for (const when of whens) {
-            const onsetTime = +((when.getAttribute('absolute') || '').replace('ms', ''))
-            const duration = +((when.querySelector('extData[type="duration"]')?.textContent || '0').replace('ms', ''))
-            if (!onsetTime) continue
+        // displace notes based on matched pairs
+        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
+        const notes = meiDoc.querySelectorAll('note')
+        for (const note of notes) {
+            const xmlId = note.getAttribute('xml:id')
+            if (!xmlId) continue
 
-            const velocity = when.querySelector('extData[type="velocity"]')?.textContent
-            if (!velocity) continue
+            const span = getSpanForNote(xmlId)
+            if (!span) continue
 
-            const notes = when.getAttribute('data')?.split(' ').map(ref => document.querySelector(ref))
-            if (!notes) continue
+            const svgNote = svg?.querySelector(`[id="${xmlId}"]`) as SVGElement | null
+            if (!svgNote) {
+                console.log('No corresponding SVG note found for', xmlId)
+                continue
+            }
 
-            for (const note of notes) {
-                if (!note) continue
+            const use = svgNote.querySelector('use') as SVGUseElement | null
+            if (!use) continue
 
-                const use = note.querySelector('use')
-                if (!use) continue
+            // set the opacity according to the velocity
+            // changeOpacity(svgNote, span.velocity)
 
-                const id = note.getAttribute('id')
-                if (!id) {
-                    console.log('No id found for element, skipping element', note)
-                    continue
+            // set the X position based on the onset time and
+            // store the original value.
+            const newX = toSVG([span.onsetMs, 0])[0] * 20
+            shiftNote(svgNote, newX)
+            note.querySelector('use')?.setAttribute('data-original', use.getAttribute('x') || '0')                // console.log(onsetTime, '=>', newX)
+            note.setAttribute('data-onset', span.onsetMs.toString())
+            shiftStem(svgNote, newX)
+
+            // Move the second note of a tie and set its
+            // opacity based on the velocity
+            const endNote = tiedNoteOf(svgNote)
+            if (endNote) {
+                const times = vrvToolkit.getTimesForElement(xmlId)
+                const share = (times.scoreTimeDuration - times.scoreTimeTiedDuration) / times.scoreTimeDuration
+                const endX = (newX + share * toSVG([span.offsetMs - span.onsetMs, 0])[0] * 10)
+
+                const endUse = endNote.querySelector('use') as SVGUseElement | null
+                if (endUse && !isNaN(share)) {
+                    endUse.setAttribute('data-original', endUse.getAttribute('x')!)
+                    endUse.setAttribute('x', endX.toString())
                 }
-
-                // set the opacity according to the velocity
-                changeOpacity(note, +velocity)
-
-                // set the X position based on the onset time and
-                // store the original value.
-                const newX = toSVG([+onsetTime, 0])[0] * 20
-                shiftNote(note, newX)
-                note.querySelector('use')?.setAttribute('data-original', use.getAttribute('x') || '0')                // console.log(onsetTime, '=>', newX)
-                note.setAttribute('data-onset', onsetTime.toString())
-                shiftStem(note, newX)
-
-                // Move the second note of a tie and set its
-                // opacity based on the velocity
-                const endNote = tiedNoteOf(note)
-                if (endNote) {
-                    const times = vrvToolkit.getTimesForElement(id)
-                    const share = (times.scoreTimeDuration - times.scoreTimeTiedDuration) / times.scoreTimeDuration
-                    const endX = (newX + share * toSVG([+duration, 0])[0] * 10)
-
-                    const endUse = endNote.querySelector('use')
-                    if (endUse && !isNaN(share)) {
-                        endUse.setAttribute('data-original', endUse.getAttribute('x')!)
-                        endUse.setAttribute('x', endX.toString())
-                    }
-                    shiftStem(endNote, endX)
-                    changeOpacity(endNote, +velocity)
-                }
+                shiftStem(endNote, endX)
+                // changeOpacity(endNote, +velocity)
             }
         }
 
@@ -210,7 +204,7 @@ export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
                     console.log('encountered 2',
                         unshiftedNote.getAttribute('data-onset'),
                         unshiftedNote.querySelector('use')?.getAttribute('x'))
-                        unshiftedNote.querySelector('use')?.getAttribute('data-original')
+                    unshiftedNote.querySelector('use')?.getAttribute('data-original')
                 }
 
                 const x = +(unshiftedNoteUse.getAttribute('x') || 0)
@@ -220,20 +214,19 @@ export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
 
                 console.log('shifting', unshiftedNote, 'further by', newX)
 
-                shiftNote(unshiftedNote, newX)
-                shiftStem(unshiftedNote, newX)
+                shiftNote(unshiftedNote as SVGElement, newX)
+                shiftStem(unshiftedNote as SVGElement, newX)
             }
         }
 
         redoBeams();
         redoTies();
-        redoBarLines(mei);
-    }, [svg, mei, toSVG, vrvToolkit, playSingleNote])
+        redoBarLines(meiDoc);
+    }, [svg, mei, toSVG, vrvToolkit, getSpanForNote, highlight, playSingleNote])
 
     useEffect(() => {
         if (!vrvToolkit) return
 
-        const text = new XMLSerializer().serializeToString(mei)
         vrvToolkit.setOptions({
             adjustPageHeight: true,
             adjustPageWidth: true,
@@ -241,7 +234,7 @@ export const AlignedMEI = ({ mei, toSVG, highlight }: AlignedMEIProps) => {
             svgViewBox: true,
             svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n']
         });
-        vrvToolkit.loadData(text);
+        vrvToolkit.loadData(mei);
         vrvToolkit.renderToMIDI()
         setSVG(vrvToolkit.renderToSVG(1));
 

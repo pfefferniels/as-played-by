@@ -155,3 +155,25 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
     console.log(sorted.length, 'events within [', sorted[0].onset, sorted[sorted.length - 1].onset, ']')
     return sorted
 };
+
+
+export const midiSpansForParangonar = (midi: MidiFile) => {
+    const spans = asSpans(midi, true)
+    return spans
+        .filter(span => span.type === 'note')
+        .map(span => {
+            // format: { onset, duration, onset_tick, duration_tick, pitch, velocity, track, channel, id }
+
+            return [
+                span.onsetMs / 1000,
+                (span.offsetMs - span.onsetMs) / 1000,
+                span.onset,
+                span.offset - span.onset,
+                span.pitch,
+                span.velocity,
+                1,
+                span.channel,
+                span.id
+            ]
+        })
+}

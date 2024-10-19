@@ -64,27 +64,3 @@ button:focus-visible {
   }
 }
 
-.ledgerLines {
-  display: none;
-}
-
-.flag {
-  display: none;
-}
-
-.dots {
-  display: none;
-}
-
-.rest {
-  display: none;
-}
-
-/*
-.beam>polygon {
-  display: none;
-}*/
-
-.accid {
-  display: none;
-}
