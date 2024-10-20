@@ -10,9 +10,10 @@ interface MidiViewerProps {
     toSVG: (point: Point) => Point
     height: number
     highlight?: AnySpan
+    isInsertion: (id: string) => boolean
 }
 
-export const MidiViewer = ({ file, toSVG, height, highlight }: MidiViewerProps) => {
+export const MidiViewer = ({ file, toSVG, height, highlight, isInsertion }: MidiViewerProps) => {
     // const { playSingleNote } = usePiano()
     const [spans, setSpans] = useState<AnySpan[]>([])
 
@@ -28,6 +29,7 @@ export const MidiViewer = ({ file, toSVG, height, highlight }: MidiViewerProps) 
     return (
         <svg width={lastPoint[0] + 100} height={height} ref={svgRef}>
             {spans.map((span, i) => {
+                const insertion = isInsertion(span.id)
                 if (span.type === 'note') {
                     return (
                         <Note
@@ -35,6 +37,7 @@ export const MidiViewer = ({ file, toSVG, height, highlight }: MidiViewerProps) 
                             toSVG={toSVG}
                             span={span}
                             highlight={span.id === highlight?.id}
+                            isInsertion={insertion}
                         />
                     )
                 }
@@ -46,16 +49,23 @@ export const MidiViewer = ({ file, toSVG, height, highlight }: MidiViewerProps) 
     )
 }
 
-const Note = ({ toSVG, span, highlight }: { toSVG: (point: Point) => Point, span: NoteSpan, highlight: boolean }) => {
+interface NoteProps {
+    toSVG: (point: Point) => Point
+    span: NoteSpan
+    highlight: boolean
+    isInsertion: boolean
+}
+
+const Note = ({ toSVG, span, highlight, isInsertion }: NoteProps) => {
     const point1 = toSVG([span.onsetMs, span.pitch])
     const point2 = toSVG([span.offsetMs, span.pitch])
 
     return (
         <rect
             className='midiNote'
-            fill={span.channel === 1 ? 'red' : 'blue'}
-            strokeWidth={highlight ? 7 : 0.5}
-            stroke="black"
+            fill={isInsertion ? 'red' : 'gray'}
+            strokeWidth={isInsertion? 2 : highlight ? 7 : 0.5}
+            stroke={isInsertion ? 'black' : 'gray'}
             x={point1[0]}
             y={point1[1]}
             width={point2[0] - point1[0]}

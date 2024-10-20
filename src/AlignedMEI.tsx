@@ -107,7 +107,7 @@ const tiedNoteOf = (note: SVGElement) => {
 
 interface AlignedMEIProps {
     mei: string
-    getSpanForNote: (id: string) => AnySpan | undefined
+    getSpanForNote: (id: string) => AnySpan | 'deletion' | undefined
     toSVG: (point: [number, number]) => [number, number]
     highlight?: string
 }
@@ -142,18 +142,32 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight }: AlignedMEI
         // displace notes based on matched pairs
         const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
         const notes = meiDoc.querySelectorAll('note')
+
+        let lastSpan: AnySpan | undefined = undefined
         for (const note of notes) {
             const xmlId = note.getAttribute('xml:id')
             if (!xmlId) continue
-
-            const span = getSpanForNote(xmlId)
-            if (!span) continue
 
             const svgNote = svg?.querySelector(`[id="${xmlId}"]`) as SVGElement | null
             if (!svgNote) {
                 console.log('No corresponding SVG note found for', xmlId)
                 continue
             }
+
+            const span = getSpanForNote(xmlId)
+            if (!span) {
+                continue
+            }
+            else if (span === 'deletion') {
+                console.log('setting to red', svgNote)
+                if (lastSpan) {
+                    shiftNote(svgNote, toSVG([lastSpan.onsetMs, 0])[0] * 20)
+                }
+
+                svgNote.setAttribute('fill', 'red');
+                continue
+            }
+            lastSpan = span
 
             const use = svgNote.querySelector('use') as SVGUseElement | null
             if (!use) continue

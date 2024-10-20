@@ -24,7 +24,7 @@
     "tonal": "^6.0.1",
     "tone": "^14.7.77",
     "uuid": "^10.0.0",
-    "verovio": "^4.1.0",
+    "verovio": "file:../verovio/emscripten/npm",
     "webmidi": "^2.5.1"
   },
   "devDependencies": {

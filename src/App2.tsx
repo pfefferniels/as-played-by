@@ -8,13 +8,17 @@ import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 
 interface Pair {
-    label: 'match'
+    label: 'match' | 'deletion' | 'insertion'
     performance_id: string
     score_id: string
 }
 
 const isPair = (pair: Partial<Pair>): pair is Pair => {
-    return 'label' in pair && 'performance_id' in pair && 'score_id' in pair
+    if (!('label' in pair)) return false
+    if (pair.label === 'match') return 'performance_id' in pair && 'score_id' in pair
+    else if (pair.label === 'deletion') return 'score_id' in pair
+    else if (pair.label === 'insertion') return 'performance_id' in pair
+    return false
 }
 
 export const App = () => {
@@ -91,7 +95,10 @@ export const App = () => {
                 }
 
                 setPairs(data.map(pair => {
-                    pair.score_id = pair.score_id.slice(4)
+                    if ('score_id' in pair) {
+                        pair.score_id = pair.score_id.slice(4)
+                    }
+                    
                     return pair
                 }))
             })
@@ -146,6 +153,11 @@ export const App = () => {
                                 file={midi}
                                 height={390}
                                 toSVG={toSVG}
+                                isInsertion={(id: string) => {
+                                    if (!pairs.length) return false
+                                    const pair = pairs.find(pair => pair.performance_id === id)
+                                    return pair?.label === 'insertion' || false
+                                }}
                             />)}
                     </div>
 
@@ -154,12 +166,14 @@ export const App = () => {
                             <AlignedMEI
                                 mei={mei}
                                 getSpanForNote={(id: string) => {
-                                    console.log('searching pair', id)
                                     if (!midi || pairs.length === 0) return
 
                                     const pair = pairs.find(pair => pair.score_id === id)
-                                    console.log('pair', pair, pairs)
                                     if (!pair) return
+
+                                    if (pair.label === 'deletion') {
+                                        return 'deletion'
+                                    }
 
                                     const spans = asSpans(midi)
                                     return spans.find(span => span.id === pair.performance_id)
