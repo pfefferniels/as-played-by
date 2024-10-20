@@ -110,9 +110,10 @@ interface AlignedMEIProps {
     getSpanForNote: (id: string) => AnySpan | 'deletion' | undefined
     toSVG: (point: [number, number]) => [number, number]
     highlight?: string
+    onClick: (id: string) => void
 }
 
-export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight }: AlignedMEIProps) => {
+export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: AlignedMEIProps) => {
     const { playSingleNote } = usePiano()
     const [vrvToolkit, setVrvToolkit] = useState<VerovioToolkit>();
     const [svg, setSVG] = useState<string>('');
@@ -154,12 +155,13 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight }: AlignedMEI
                 continue
             }
 
+            svgNote.addEventListener('click', () => onClick(xmlId))
+
             const span = getSpanForNote(xmlId)
             if (!span) {
                 continue
             }
             else if (span === 'deletion') {
-                console.log('setting to red', svgNote)
                 if (lastSpan) {
                     shiftNote(svgNote, toSVG([lastSpan.onsetMs, 0])[0] * 20)
                 }
@@ -236,7 +238,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight }: AlignedMEI
         redoBeams();
         redoTies();
         redoBarLines(meiDoc);
-    }, [svg, mei, toSVG, vrvToolkit, getSpanForNote, highlight, playSingleNote])
+    }, [svg, mei, toSVG, vrvToolkit, getSpanForNote, highlight, playSingleNote, onClick])
 
     useEffect(() => {
         if (!vrvToolkit) return

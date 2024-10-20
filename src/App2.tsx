@@ -1,11 +1,12 @@
 import { MidiFile, read } from "midifile-ts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { asSpans, midiSpansForParangonar } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
 import { Box, Button, FormControl, Slider, Stack } from "@mui/material"
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
+import { xml } from '@codemirror/lang-xml'
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -25,6 +26,7 @@ export const App = () => {
     const [mei, setMEI] = useState<string>();
     const [midi, setMIDI] = useState<MidiFile>();
     const [pairs, setPairs] = useState<Pair[]>([])
+    const editorRef = useRef<ReactCodeMirrorRef>(null)
 
     const [stretch, setStretch] = useState<number>(0.1);
 
@@ -98,10 +100,21 @@ export const App = () => {
                     if ('score_id' in pair) {
                         pair.score_id = pair.score_id.slice(4)
                     }
-                    
+
                     return pair
                 }))
             })
+    }
+
+    const scrollToRange = (left: number, right: number) => {
+        if (!editorRef.current || !editorRef.current.state?.doc) {
+            return
+        }
+    
+        editorRef.current.view?.dispatch({
+            selection: EditorSelection.single(left, right),
+            scrollIntoView: true,
+        })
     }
 
     const toSVG = ([a, b]: [number, number]) => [(a - 100) * stretch, (110 - b) * 5] as [number, number]
@@ -142,7 +155,10 @@ export const App = () => {
                     <Button variant="outlined" onClick={downloadMEI}>Download Aligned MEI</Button>
                     <Button variant="outlined" onClick={alignWithParangonar}>Align</Button>
                 </Stack>
-                <span style={{ color: 'gray' }}>({pairs.length} pairs)</span>
+                <span style={{ color: 'gray' }}>
+                    ({pairs.filter(p => p.label === 'match').length} matches,{' '}
+                    {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
+                    {pairs.filter(p => p.label === 'insertion').length} insertions)</span>
             </Box>
 
             <Stack spacing={1} direction='row'>
@@ -178,6 +194,13 @@ export const App = () => {
                                     const spans = asSpans(midi)
                                     return spans.find(span => span.id === pair.performance_id)
                                 }}
+                                onClick={(id: string) => {
+                                    if (!mei) return
+
+                                    if (mei.includes(id)) {
+                                        scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                    }
+                                }}
                                 toSVG={toSVG}
                             />
                         )
@@ -188,8 +211,12 @@ export const App = () => {
                 <Box>
                     <CodeMirror
                         value={mei || ''}
+                        onChange={newMEI => setMEI(newMEI)}
+                        extensions={[xml()]}
+                        lang='application/xml'
                         height="80vh"
                         width="48vw"
+                        ref={editorRef}
                     />
                 </Box>
             </Stack>
