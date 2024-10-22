@@ -161,6 +161,7 @@ export const midiSpansForParangonar = (midi: MidiFile) => {
     const spans = asSpans(midi, true)
     return spans
         .filter(span => span.type === 'note')
+        .filter(span => (span.offsetMs - span.onsetMs) > 0)
         .map(span => {
             // format: { onset, duration, onset_tick, duration_tick, pitch, velocity, track, channel, id }
 
