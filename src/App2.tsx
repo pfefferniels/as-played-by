@@ -8,6 +8,7 @@ import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { xml } from '@codemirror/lang-xml'
 import { loadVerovio } from "./loadVerovio.mts";
+import { CodeEditor } from "./CodeEditor";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -230,13 +231,9 @@ export const App = () => {
                 </Box>
 
                 <Box>
-                    <CodeMirror
-                        value={mei || ''}
-                        onChange={newMEI => setMEI(newMEI)}
-                        extensions={[xml()]}
-                        lang='application/xml'
-                        height="80vh"
-                        width="48vw"
+                    <CodeEditor
+                        mei={mei || ''}
+                        onSave={setMEI}
                         ref={editorRef}
                     />
                 </Box>
