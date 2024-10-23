@@ -7,6 +7,7 @@ import CodeMirror, { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-code
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { xml } from '@codemirror/lang-xml'
+import { loadVerovio } from "./loadVerovio.mts";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -106,6 +107,25 @@ export const App = () => {
             })
     }
 
+    const expandMEI = async () => {
+        if (!mei) return
+
+        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
+        const expansionIds = Array
+            .from(meiDoc.querySelectorAll('expansion'))
+            .filter(el => el.hasAttribute('xml:id'))
+            .map(el => el.getAttribute('xml:id')!)
+
+        if (expansionIds.length === 0) return
+
+        console.log('expanding', expansionIds[0])
+
+        const tk = await loadVerovio()
+        tk.setOptions({ expand: expansionIds[0] })
+        tk.loadData(mei)
+        setMEI(tk.getMEI())
+    }
+
     const scrollToRange = (left: number, right: number) => {
         if (!editorRef.current || !editorRef.current.state?.doc) {
             return
@@ -152,6 +172,7 @@ export const App = () => {
 
             <Box>
                 <Stack spacing={1} direction='row'>
+                    <Button variant='outlined' onClick={expandMEI}>Expand MEI</Button>
                     <Button variant="outlined" onClick={downloadMEI}>Download Aligned MEI</Button>
                     <Button variant="outlined" onClick={alignWithParangonar}>Align</Button>
                 </Stack>
