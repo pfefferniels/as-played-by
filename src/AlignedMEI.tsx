@@ -146,12 +146,6 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
             }
         }
 
-        const svg = document.querySelector('#scoreDiv svg') as SVGElement
-        if (svg) {
-            const width = svg.getAttribute('viewBox')?.split(' ')[2]
-            svg.setAttribute('width', width ? (+width / 2.5).toString() : '2000')
-        }
-
         // displace notes based on matched pairs
         const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
         const notes = meiDoc.querySelectorAll('note')
@@ -260,7 +254,8 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
             adjustPageWidth: true,
             breaks: 'none',
             svgViewBox: true,
-            svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n']
+            svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n'],
+            appXPathQuery: ['./rdg[contains(@source, "performance")]']
         });
         vrvToolkit.loadData(mei);
         vrvToolkit.renderToMIDI()
@@ -313,6 +308,7 @@ function redoBarLines(mei: Document) {
 }
 
 function redoTies() {
+    console.log('redo ties')
     const ties = document.querySelectorAll('.tie');
     for (const tie of ties) {
         const path = tie.querySelector('path');

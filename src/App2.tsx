@@ -2,13 +2,13 @@ import { MidiFile, read } from "midifile-ts";
 import { useRef, useState } from "react";
 import { asSpans, midiSpansForParangonar } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, Slider, Stack } from "@mui/material"
-import CodeMirror, { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { Box, Button, FormControl, Slider, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
+import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
-import { xml } from '@codemirror/lang-xml'
-import { loadVerovio } from "./loadVerovio.mts";
 import { CodeEditor } from "./CodeEditor";
+import { OriginalMEI } from "./OriginalMEI";
+import { insertWhen } from "./When";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -25,12 +25,14 @@ const isPair = (pair: Partial<Pair>): pair is Pair => {
 }
 
 export const App = () => {
-    const [mei, setMEI] = useState<string>();
-    const [midi, setMIDI] = useState<MidiFile>();
+    const [mei, setMEI] = useState<string>()
+    const [midi, setMIDI] = useState<MidiFile>()
     const [pairs, setPairs] = useState<Pair[]>([])
-    const editorRef = useRef<ReactCodeMirrorRef>(null)
 
     const [stretch, setStretch] = useState<number>(0.1);
+    const [mode, setMode] = useState<'original' | 'aligned'>('original');
+
+    const editorRef = useRef<ReactCodeMirrorRef>(null)
 
     const handleMEI = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!event.target.files || !event.target.files.length) return;
@@ -79,13 +81,29 @@ export const App = () => {
         URL.revokeObjectURL(url);
     };
 
-    const alignWithParangonar = () => {
+    const alignWithParangonar = async () => {
         if (!midi || !mei) return
 
         const spans = midiSpansForParangonar(midi)
 
         const formData = new FormData()
-        formData.append('mei', mei)
+
+        // make sure to only select performed notes
+        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
+        meiDoc.querySelectorAll('app').forEach((app) => {
+            const perfRdg = app.querySelector('rdg[source="performance"]')
+            if (!perfRdg) {
+                // partitura, on which parangonar is based, 
+                // does not digest <app> elements: make sure
+                // there are none left
+                app.remove()
+                return
+            }
+
+            app.replaceWith(...perfRdg.childNodes)
+        })
+
+        formData.append('mei', new XMLSerializer().serializeToString(meiDoc))
         formData.append('midi', JSON.stringify(spans))
 
         fetch('http://localhost:5000/align', {
@@ -100,7 +118,8 @@ export const App = () => {
 
                 setPairs(data.map(pair => {
                     if ('score_id' in pair) {
-                        pair.score_id = pair.score_id.slice(4)
+                        // FIXME: different for multiple staves: use slice(4)
+                        pair.score_id = pair.score_id.slice(0)
                     }
 
                     return pair
@@ -108,30 +127,28 @@ export const App = () => {
             })
     }
 
-    const expandMEI = async () => {
-        if (!mei) return
+    const handleInsert = () => {
+        if (!midi || !mei) return 
 
-        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
-        const expansionIds = Array
-            .from(meiDoc.querySelectorAll('expansion'))
-            .filter(el => el.hasAttribute('xml:id'))
-            .map(el => el.getAttribute('xml:id')!)
+        const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
+        const spans = asSpans(midi)
+        for (const pair of pairs) {
+            if (pair.label !== 'match') continue 
 
-        if (expansionIds.length === 0) return
+            const span = spans.find(span => span.id === pair.performance_id)
+            if (!span) continue 
 
-        console.log('expanding', expansionIds[0])
+            insertWhen(meiDoc, span, pair.score_id)
+        }
 
-        const tk = await loadVerovio()
-        tk.setOptions({ expand: expansionIds[0] })
-        tk.loadData(mei)
-        setMEI(tk.getMEI())
+        setMEI(new XMLSerializer().serializeToString(meiDoc))
     }
 
     const scrollToRange = (left: number, right: number) => {
         if (!editorRef.current || !editorRef.current.state?.doc) {
             return
         }
-    
+
         editorRef.current.view?.dispatch({
             selection: EditorSelection.single(left, right),
             scrollIntoView: true,
@@ -173,14 +190,34 @@ export const App = () => {
 
             <Box>
                 <Stack spacing={1} direction='row'>
-                    <Button variant='outlined' onClick={expandMEI}>Expand MEI</Button>
-                    <Button variant="outlined" onClick={downloadMEI}>Download Aligned MEI</Button>
                     <Button variant="outlined" onClick={alignWithParangonar}>Align</Button>
+                    <Button
+                        variant="outlined"
+                        disabled={pairs.length === 0}
+                        onClick={handleInsert}
+                    >
+                        Insert {'<'}when{'>'}s
+                    </Button>
+                    <ToggleButtonGroup
+                        value={mode}
+                        exclusive
+                        onChange={(_, value) => setMode(value as 'original' | 'aligned')}
+                        aria-label="alignment"
+                    >
+                        <ToggleButton value="original" aria-label="original">
+                            Original
+                        </ToggleButton>
+                        <ToggleButton value="aligned" aria-label="aligned" disabled={pairs.length === 0}>
+                            Aligned
+                        </ToggleButton>
+                    </ToggleButtonGroup>
                 </Stack>
-                <span style={{ color: 'gray' }}>
-                    ({pairs.filter(p => p.label === 'match').length} matches,{' '}
-                    {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
-                    {pairs.filter(p => p.label === 'insertion').length} insertions)</span>
+                {pairs.length > 0 && (
+                    <span style={{ color: 'gray' }}>
+                        ({pairs.filter(p => p.label === 'match').length} matches,{' '}
+                        {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
+                        {pairs.filter(p => p.label === 'insertion').length} insertions)</span>
+                )}
             </Box>
 
             <Stack spacing={1} direction='row'>
@@ -200,33 +237,47 @@ export const App = () => {
                     </div>
 
                     <div style={{ width: '50vw', overflow: 'scroll' }}>
-                        {mei && (
-                            <AlignedMEI
-                                mei={mei}
-                                getSpanForNote={(id: string) => {
-                                    if (!midi || pairs.length === 0) return
+                        {(mei && mode === 'aligned')
+                            ? (
+                                <AlignedMEI
+                                    mei={mei}
+                                    getSpanForNote={(id: string) => {
+                                        if (!midi || pairs.length === 0) return
 
-                                    const pair = pairs.find(pair => pair.score_id === id)
-                                    if (!pair) return
+                                        console.log(pairs)
 
-                                    if (pair.label === 'deletion') {
-                                        return 'deletion'
-                                    }
+                                        const pair = pairs.find(pair => pair.score_id === id)
+                                        console.log('pair', pair)
+                                        if (!pair) return
 
-                                    const spans = asSpans(midi)
-                                    return spans.find(span => span.id === pair.performance_id)
-                                }}
-                                onClick={(id: string) => {
-                                    if (!mei) return
+                                        if (pair.label === 'deletion') {
+                                            return 'deletion'
+                                        }
 
-                                    if (mei.includes(id)) {
-                                        scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                    }
-                                }}
-                                toSVG={toSVG}
-                            />
-                        )
-                        }
+                                        const spans = asSpans(midi)
+                                        return spans.find(span => span.id === pair.performance_id)
+                                    }}
+                                    onClick={(id: string) => {
+                                        console.log(id, 'clicked')
+                                        if (!mei) return
+
+                                        if (mei.includes(id)) {
+                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                        }
+                                    }}
+                                    toSVG={toSVG}
+                                />)
+                            : (
+                                <OriginalMEI
+                                    mei={mei || ''}
+                                    onClick={(id: string) => {
+                                        if (!mei) return
+
+                                        if (mei.includes(id)) {
+                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                        }
+                                    }}
+                                />)}
                     </div>
                 </Box>
 

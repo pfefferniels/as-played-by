@@ -1,46 +1,75 @@
-import { RefObject, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { xml } from '@codemirror/lang-xml';
-import { Button } from '@mui/material';
+import { Button, Stack } from '@mui/material';
+import { loadVerovio } from './loadVerovio.mts';
 
 interface CodeEditorProps {
     mei: string;
     onSave: (newMEI: string) => void;
-    ref: RefObject<ReactCodeMirrorRef>
 }
 
-export const CodeEditor = ({
-    mei,
-    onSave,
-    ref
-}: CodeEditorProps) => {
-    const [text, setText] = useState(mei)
+export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
+    ({ mei, onSave }: CodeEditorProps, ref) => {
+        const [text, setText] = useState(mei)
 
-    useEffect(() => {
-        setText(mei)
-    }, [mei])
+        useEffect(() => {
+            setText(mei)
+        }, [mei])
 
-    return (
-        <>
-            <Button
-                variant="contained"
-                color="primary"
-                onClick={() => onSave(text)}
-                disabled={mei === text}
-                sx={{ mb: 1 }}
-            >
-                Save
-            </Button>
+        const handleExpand = async () => {
+            if (!text) return
 
-            <CodeMirror
-                value={text || ''}
-                onChange={text => setText(text)}
-                extensions={[xml()]}
-                lang='application/xml'
-                height="70vh"
-                width="48vw"
-                ref={ref}
-            />
-        </>
-    )
-};
+            const meiDoc = new DOMParser().parseFromString(text, 'application/xml')
+            const expansionIds = Array
+                .from(meiDoc.querySelectorAll('expansion'))
+                .filter(el => el.hasAttribute('xml:id'))
+                .map(el => el.getAttribute('xml:id')!)
+
+            if (expansionIds.length === 0) return
+
+            const tk = await loadVerovio()
+            tk.setOptions({ expand: expansionIds[0], preserveAnalyticalMarkup: true })
+            tk.loadData(mei)
+            setText(tk.getMEI())
+        }
+
+        const handleSave = async () => {
+            if (!text) return
+
+            const tk = await loadVerovio()
+            tk.setOptions({ preserveAnalyticalMarkup: true })
+            tk.loadData(text)
+            onSave(tk.getMEI())
+        }
+
+
+        return (
+            <>
+                <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleSave}
+                        disabled={mei === text}
+                    >
+                        Save
+                    </Button>
+
+                    <Button variant="contained" onClick={handleExpand}>
+                        Expand Repetitions
+                    </Button>
+                </Stack>
+
+                <CodeMirror
+                    value={text || ''}
+                    onChange={text => setText(text)}
+                    extensions={[xml()]}
+                    lang='application/xml'
+                    height="70vh"
+                    width="48vw"
+                    ref={ref}
+                />
+            </>
+        )
+    })
