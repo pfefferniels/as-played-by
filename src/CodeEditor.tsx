@@ -3,7 +3,7 @@ import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { xml } from '@codemirror/lang-xml';
 import { Button, Stack } from '@mui/material';
 import { loadVerovio } from './loadVerovio.mts';
-
+import { Download, Save } from '@mui/icons-material';
 interface CodeEditorProps {
     mei: string;
     onSave: (newMEI: string) => void;
@@ -66,16 +66,17 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
                         color="primary"
                         onClick={handleSave}
                         disabled={mei === text}
+                        startIcon={<Save />}
                     >
                         Apply
                     </Button>
 
-                    <Button variant="contained" onClick={handleExpand}>
-                        Expand Repetitions
+                    <Button variant='contained' disabled={text.length === 0} onClick={handleDownload} startIcon={<Download />}>
+                        Download
                     </Button>
 
-                    <Button variant='contained' disabled={text.length === 0} onClick={handleDownload}>
-                        Download
+                    <Button variant="contained" onClick={handleExpand}>
+                        Expand Repetitions
                     </Button>
                 </Stack>
 

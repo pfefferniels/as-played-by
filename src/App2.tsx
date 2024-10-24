@@ -2,13 +2,15 @@ import { MidiFile, read } from "midifile-ts";
 import { useRef, useState } from "react";
 import { asSpans, midiSpansForParangonar } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, Slider, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
+import { Box, Button, FormControl, IconButton, Slider, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { CodeEditor } from "./CodeEditor";
 import { OriginalMEI } from "./OriginalMEI";
 import { insertWhen } from "./When";
+import { Info } from "@mui/icons-material";
+import InfoDialog from "./Info";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -31,6 +33,8 @@ export const App = () => {
 
     const [stretch, setStretch] = useState<number>(0.1);
     const [mode, setMode] = useState<'original' | 'aligned'>('original');
+
+    const [showHelp, setShowHelp] = useState(false)
 
     const editorRef = useRef<ReactCodeMirrorRef>(null)
 
@@ -114,15 +118,15 @@ export const App = () => {
     }
 
     const handleInsert = () => {
-        if (!midi || !mei) return 
+        if (!midi || !mei) return
 
         const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
         const spans = asSpans(midi)
         for (const pair of pairs) {
-            if (pair.label !== 'match') continue 
+            if (pair.label !== 'match') continue
 
             const span = spans.find(span => span.id === pair.performance_id)
-            if (!span) continue 
+            if (!span) continue
 
             insertWhen(meiDoc, span, pair.score_id)
         }
@@ -145,136 +149,159 @@ export const App = () => {
 
     return (
         <>
-            <Box>
-                <Stack spacing={1} direction='row'>
-                    <Button variant="outlined" component="label">
-                        Upload MEI
-                        <input type="file" hidden accept=".mei" onChange={handleMEI} />
-                    </Button>
-                    <br />
-
-                    <Button variant="outlined" component="label">
-                        Upload MIDI
-                        <input type="file" hidden accept=".midi,.mid" onChange={handleMIDI} />
-                    </Button>
-                </Stack>
-            </Box>
-
-            <Box>
-                <FormControl>
-                    <Slider
-                        sx={{ width: '20rem' }}
-                        min={0.01}
-                        max={0.2}
-                        step={0.01}
-                        value={stretch}
-                        onChange={(_, value) => setStretch(value as number)}
-                        valueLabelDisplay="auto"
-                    />
-                </FormControl>
-            </Box>
-
-            <Box>
-                <Stack spacing={1} direction='row'>
-                    <Button variant="outlined" onClick={alignWithParangonar}>Align</Button>
-                    <Button
-                        variant="outlined"
-                        disabled={pairs.length === 0}
-                        onClick={handleInsert}
-                    >
-                        Insert {'<'}when{'>'}s
-                    </Button>
-                    <ToggleButtonGroup
-                        value={mode}
-                        exclusive
-                        onChange={(_, value) => setMode(value as 'original' | 'aligned')}
-                        aria-label="alignment"
-                    >
-                        <ToggleButton value="original" aria-label="original">
-                            Original
-                        </ToggleButton>
-                        <ToggleButton value="aligned" aria-label="aligned" disabled={pairs.length === 0}>
-                            Aligned
-                        </ToggleButton>
-                    </ToggleButtonGroup>
-                </Stack>
-                {pairs.length > 0 && (
-                    <span style={{ color: 'gray' }}>
-                        ({pairs.filter(p => p.label === 'match').length} matches,{' '}
-                        {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
-                        {pairs.filter(p => p.label === 'insertion').length} insertions)</span>
-                )}
-            </Box>
-
-            <Stack spacing={1} direction='row'>
+            <Stack spacing={1}>
                 <Box>
-                    <div style={{ width: '50vw', overflow: 'scroll' }}>
-                        {midi && (
-                            <MidiViewer
-                                file={midi}
-                                height={390}
-                                toSVG={toSVG}
-                                isInsertion={(id: string) => {
-                                    if (!pairs.length) return false
-                                    const pair = pairs.find(pair => pair.performance_id === id)
-                                    return pair?.label === 'insertion' || false
-                                }}
-                            />)}
-                    </div>
+                    <Stack spacing={1} direction='row'>
+                        <Button variant="outlined" component="label">
+                            Upload MEI
+                            <input type="file" hidden accept=".mei" onChange={handleMEI} />
+                        </Button>
 
-                    <div style={{ width: '50vw', overflow: 'scroll' }}>
-                        {(mei && mode === 'aligned')
-                            ? (
-                                <AlignedMEI
-                                    mei={mei}
-                                    getSpanForNote={(id: string) => {
-                                        if (!midi || pairs.length === 0) return
+                        <Button variant="outlined" component="label">
+                            Upload MIDI
+                            <input type="file" hidden accept=".midi,.mid" onChange={handleMIDI} />
+                        </Button>
 
-                                        console.log(pairs)
+                        <IconButton onClick={() => setShowHelp(true)}>
+                            <Info />
+                        </IconButton>
+                    </Stack>
+                </Box>
 
-                                        const pair = pairs.find(pair => pair.score_id === id)
-                                        console.log('pair', pair)
-                                        if (!pair) return
+                <Box>
+                    <Stack spacing={1} direction='row'>
+                        <Button
+                            size='small'
+                            disabled={!mei || !midi}
+                            variant="outlined"
+                            onClick={alignWithParangonar}
+                        >
+                            Align
+                        </Button>
+                        <Button
+                            size='small'
+                            variant="outlined"
+                            disabled={pairs.length === 0}
+                            onClick={handleInsert}
+                        >
+                            Insert {'<'}when{'>'}s
+                        </Button>
+                        <ToggleButtonGroup
+                            size='small'
+                            value={mode}
+                            exclusive
+                            onChange={(_, value) => setMode(value as 'original' | 'aligned')}
+                            aria-label="alignment"
+                        >
+                            <ToggleButton value="original" aria-label="original">
+                                Original
+                            </ToggleButton>
+                            <ToggleButton value="aligned" aria-label="aligned" disabled={pairs.length === 0}>
+                                Aligned
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Stack>
+                    {pairs.length > 0 && (
+                        <span style={{ color: 'gray' }}>
+                            ({pairs.filter(p => p.label === 'match').length} matches,{' '}
+                            {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
+                            {pairs.filter(p => p.label === 'insertion').length} insertions)</span>
+                    )}
+                </Box>
 
-                                        if (pair.label === 'deletion') {
-                                            return 'deletion'
-                                        }
+                <Box sx={{ display: pairs.length === 0 ? 'none' : 'block' }}>
+                    <FormControl>
+                        <Slider
+                            sx={{ width: '20rem' }}
+                            min={0.01}
+                            max={0.2}
+                            step={0.01}
+                            value={stretch}
+                            onChange={(_, value) => setStretch(value as number)}
+                            valueLabelDisplay="auto"
+                        />
+                    </FormControl>
+                </Box>
 
-                                        const spans = asSpans(midi)
-                                        return spans.find(span => span.id === pair.performance_id)
-                                    }}
-                                    onClick={(id: string) => {
-                                        console.log(id, 'clicked')
-                                        if (!mei) return
-
-                                        if (mei.includes(id)) {
-                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                        }
-                                    }}
+                <Stack spacing={1} direction='row'>
+                    <Box>
+                        <div style={{ width: '50vw', overflow: 'scroll' }}>
+                            {midi && (
+                                <MidiViewer
+                                    file={midi}
+                                    height={390}
                                     toSVG={toSVG}
-                                />)
-                            : (
-                                <OriginalMEI
-                                    mei={mei || ''}
-                                    onClick={(id: string) => {
-                                        if (!mei) return
-
-                                        if (mei.includes(id)) {
-                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                        }
+                                    isInsertion={(id: string) => {
+                                        if (!pairs.length) return false
+                                        const pair = pairs.find(pair => pair.performance_id === id)
+                                        return pair?.label === 'insertion' || false
                                     }}
                                 />)}
-                    </div>
-                </Box>
+                        </div>
 
-                <Box>
-                    <CodeEditor
-                        mei={mei || ''}
-                        onSave={setMEI}
-                        ref={editorRef}
-                    />
-                </Box>
+                        <div style={{ width: '50vw', overflow: 'scroll' }}>
+                            {(mei && mode === 'aligned')
+                                ? (
+                                    <AlignedMEI
+                                        mei={mei}
+                                        getSpanForNote={(id: string) => {
+                                            if (!midi || pairs.length === 0) return
+
+                                            console.log(pairs)
+
+                                            const pair = pairs.find(pair => pair.score_id === id)
+                                            console.log('pair', pair)
+                                            if (!pair) return
+
+                                            if (pair.label === 'deletion') {
+                                                return 'deletion'
+                                            }
+
+                                            const spans = asSpans(midi)
+                                            return spans.find(span => span.id === pair.performance_id)
+                                        }}
+                                        onClick={(id: string) => {
+                                            console.log(id, 'clicked')
+                                            if (!mei) return
+
+                                            if (mei.includes(id)) {
+                                                scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                            }
+                                        }}
+                                        toSVG={toSVG}
+                                    />)
+                                : (
+                                    <OriginalMEI
+                                        mei={mei || ''}
+                                        onClick={(id: string) => {
+                                            if (!mei) return
+
+                                            if (mei.includes(id)) {
+                                                scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                            }
+                                        }}
+                                    />)}
+                        </div>
+                    </Box>
+
+                    <Box>
+                        <CodeEditor
+                            mei={mei || ''}
+                            onSave={setMEI}
+                            ref={editorRef}
+                        />
+                    </Box>
+                </Stack>
             </Stack>
+
+            <Box sx={{ position: 'fixed', bottom: 0, width: '100vw', textAlign: 'left', backgroundColor: 'white', padding: '0.5rem', boxShadow: '0 -2px 5px rgba(0,0,0,0.1)' }}>
+                <span>&copy; {new Date().getFullYear()} Niels Pfeffer</span>
+            </Box>
+
+            <InfoDialog
+                open={showHelp}
+                onClose={() => setShowHelp(false)}
+            />
         </>
     )
 }
