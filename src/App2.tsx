@@ -67,20 +67,6 @@ export const App = () => {
         reader.readAsArrayBuffer(file);
     };
 
-    const downloadMEI = () => {
-        if (!mei) return;
-
-        const blob = new Blob([mei], { type: 'application/xml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'aligned.mei';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
     const alignWithParangonar = async () => {
         if (!midi || !mei) return
 

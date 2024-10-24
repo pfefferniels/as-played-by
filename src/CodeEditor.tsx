@@ -17,6 +17,20 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
             setText(mei)
         }, [mei])
 
+        const handleDownload = () => {
+            if (!text) return;
+
+            const blob = new Blob([text], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'as-played-by.mei';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
         const handleExpand = async () => {
             if (!text) return
 
@@ -53,11 +67,15 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
                         onClick={handleSave}
                         disabled={mei === text}
                     >
-                        Save
+                        Apply
                     </Button>
 
                     <Button variant="contained" onClick={handleExpand}>
                         Expand Repetitions
+                    </Button>
+
+                    <Button variant='contained' disabled={text.length === 0} onClick={handleDownload}>
+                        Download
                     </Button>
                 </Stack>
 
