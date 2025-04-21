@@ -25,75 +25,77 @@ export const insertPedals = (
 
     let prevEndTstamp = 0
     for (const pedal of pedals) {
-        let bestStart = Infinity
-        let bestStartIndex = 0
-        pairs
-            .forEach((pair, i) => {
-                const diff = Math.abs(pair[1].onsetMs - pedal.onsetMs)
-                if (diff < bestStart /*&& pair[1].onsetMs > pedal.onsetMs*/) {
-                    bestStart = diff
-                    bestStartIndex = i
-                }
-            })
-
-        console.log('bast start=', bestStart, bestStartIndex)
-
-        let bestEnd = Infinity
         let bestEndIndex = 0
-        pairs
-            .forEach((pair, i) => {
-                const diff = Math.abs(pair[1].offsetMs - pedal.offsetMs)
-                if (diff < bestEnd
-                    && pairs[bestStartIndex][0].tstamp <= pair[0].tstamp) {
-                    bestEnd = diff
-                    bestEndIndex = i
+        let pedalElementId: string | undefined = undefined
+        if (pairs.length > 0) {
+            let bestStart = Infinity
+            let bestStartIndex = 0
+            pairs
+                .forEach((pair, i) => {
+                    const diff = Math.abs(pair[1].onsetMs - pedal.onsetMs)
+                    if (diff < bestStart /*&& pair[1].onsetMs > pedal.onsetMs*/) {
+                        bestStart = diff
+                        bestStartIndex = i
+                    }
+                })
+
+            let bestEnd = Infinity
+
+            pairs
+                .forEach((pair, i) => {
+                    const diff = Math.abs(pair[1].offsetMs - pedal.offsetMs)
+                    if (diff < bestEnd
+                        && pairs[bestStartIndex][0].tstamp <= pair[0].tstamp) {
+                        bestEnd = diff
+                        bestEndIndex = i
+                    }
+                })
+
+            const pedalEl = mei.createElementNS('http://www.music-encoding.org/ns/mei', 'pedal')
+
+            const startPair = pairs[bestStartIndex][0]
+            const endPair = pairs[bestEndIndex][0]
+
+            const startid = startPair.id
+            const endid = endPair.id
+
+            pedalEl.setAttribute('startid', startid)
+            if (startPair.tstamp !== endPair.tstamp) pedalEl.setAttribute('endid', endid)
+            pedalEl.setAttribute('func', pedal.type)
+            pedalEl.setAttribute('place', 'below')
+            pedalEl.setAttribute('staff', '2')
+
+            if (pedal.type === 'sustain') {
+                if (prevEndTstamp === pairs[bestStartIndex][0].tstamp) {
+                    pedalEl.setAttribute('dir', 'bounce')
+                    pedalEl.setAttribute('form', 'altpedstar')
                 }
-            })
-
-        const pedalEl = mei.createElementNS('http://www.music-encoding.org/ns/mei', 'pedal')
-
-        const startPair = pairs[bestStartIndex][0]
-        const endPair = pairs[bestEndIndex][0]
-
-        const startid = startPair.id
-        const endid = endPair.id
-
-        pedalEl.setAttribute('startid', startid)
-        if (startPair.tstamp !== endPair.tstamp) pedalEl.setAttribute('endid', endid)
-        pedalEl.setAttribute('func', pedal.type)
-        pedalEl.setAttribute('place', 'below')
-        pedalEl.setAttribute('staff', '2')
-
-        if (pedal.type === 'sustain') {
-            if (prevEndTstamp === pairs[bestStartIndex][0].tstamp) {
-                pedalEl.setAttribute('dir', 'bounce')
-                pedalEl.setAttribute('form', 'altpedstar')
+                else {
+                    pedalEl.setAttribute('dir', 'down')
+                    pedalEl.setAttribute('form', 'pedstar')
+                }
             }
             else {
-                pedalEl.setAttribute('dir', 'down')
-                pedalEl.setAttribute('form', 'pedstar')
+                pedalEl.setAttribute('type', 'soft')
             }
-        }
-        else {
-            pedalEl.setAttribute('type', 'soft')
-        }
 
-        const pedalId = v4()
-        pedalEl.setAttribute('xml:id', pedalId)
+            pedalElementId = v4()
+            pedalEl.setAttribute('xml:id', pedalElementId)
 
-        const startEl = Array.from(mei.querySelectorAll('note')).find(el => el.getAttribute('xml:id') === startid)
-        if (!startEl) {
-            console.log('start element could not be found', startid)
-            continue
+            const startEl = Array.from(mei.querySelectorAll('note')).find(el => el.getAttribute('xml:id') === startid)
+            if (!startEl) {
+                console.log('start element could not be found', startid)
+                continue
+            }
+
+            const measure = startEl.closest('measure')
+            if (!measure) {
+                console.log('element', startEl, 'is not enclosed in a measure')
+                continue
+            }
+
+            measure.appendChild(pedalEl)
         }
-
-        const measure = startEl.closest('measure')
-        if (!measure) {
-            console.log('element', startEl, 'is not enclosed in a measure')
-            continue
-        }
-
-        measure.appendChild(pedalEl)
 
         const when = mei.createElementNS('http://www.music-encoding.org/ns/mei', 'when');
         recording.appendChild(when);
@@ -101,7 +103,8 @@ export const insertPedals = (
         when.setAttribute('absolute', pedal.onsetMs.toFixed(0) + 'ms');
         when.setAttribute('abstype', 'smil');
         when.setAttribute('corresp', pedal.link || pedal.id);
-        when.setAttribute('data', `#${pedalId}`);
+        if (pedalElementId) when.setAttribute('data', `#${pedalElementId}`);
+        when.setAttribute('type', pedal.type);
 
         const durationMs = mei.createElementNS('http://www.music-encoding.org/ns/mei', 'extData');
         durationMs.setAttribute('type', 'duration');
@@ -119,6 +122,6 @@ export const insertPedals = (
         when.appendChild(onsetTicks);
         when.appendChild(durationTicks);
 
-        prevEndTstamp = pairs[bestEndIndex][0].tstamp
+        if (bestEndIndex !== 0) prevEndTstamp = pairs[bestEndIndex][0].tstamp
     }
 }

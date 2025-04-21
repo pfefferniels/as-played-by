@@ -11,6 +11,7 @@ import { OriginalMEI } from "./OriginalMEI";
 import { insertWhen } from "./When";
 import { Info } from "@mui/icons-material";
 import InfoDialog from "./Info";
+import { insertPedals } from "./insertPedals";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -107,9 +108,8 @@ export const App = () => {
                 }
 
                 setPairs(data.map(pair => {
-                    if ('score_id' in pair) {
-                        // FIXME: different for multiple staves: use slice(4)
-                        pair.score_id = pair.score_id.slice(0)
+                    if ('score_id' in pair && pair.score_id.indexOf('_') !== -1) {
+                        pair.score_id = pair.score_id.slice(pair.score_id.indexOf('_') + 1)
                     }
 
                     return pair
@@ -121,7 +121,7 @@ export const App = () => {
         if (!midi || !mei) return
 
         const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
-        const spans = asSpans(midi)
+        const spans = asSpans(midi, true)
         for (const pair of pairs) {
             if (pair.label !== 'match') continue
 
@@ -130,6 +130,12 @@ export const App = () => {
 
             insertWhen(meiDoc, span, pair.score_id)
         }
+
+        insertPedals(
+            spans.filter(span => span.type === 'soft' || span.type === 'sustain'),
+            [],
+            meiDoc
+        )
 
         setMEI(new XMLSerializer().serializeToString(meiDoc))
     }

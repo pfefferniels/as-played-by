@@ -41,6 +41,8 @@ export const OriginalMEI = ({ mei, highlight, onClick }: OriginalMEIProps) => {
 
         vrvToolkit.setOptions({
             breaks: 'smart',
+            pageHeight: 60000,
+            adjustPageHeight: true,
             svgViewBox: true
         });
         vrvToolkit.loadData(mei);

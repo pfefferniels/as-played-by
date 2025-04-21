@@ -131,7 +131,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
             svg.setAttribute('width', width ? (+width / 2.5).toString() : '2000')
 
             // hide certain notes
-            const elementsToHide = svg.querySelectorAll('.clef, .meterSig, .ledgerLines, .flag, .dots, .rest, .accid, .fermata, .artic');
+            const elementsToHide = svg.querySelectorAll('.clef, .meterSig, .ledgerLines, .flag, .dots, .rest, .accid, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir, .barLine');
             elementsToHide.forEach(el => {
                 (el as SVGGraphicsElement).style.display = 'none';
             });
