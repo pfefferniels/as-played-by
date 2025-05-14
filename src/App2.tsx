@@ -12,6 +12,7 @@ import { insertWhen } from "./When";
 import { Info } from "@mui/icons-material";
 import InfoDialog from "./Info";
 import { insertPedals } from "./insertPedals";
+import { insertMetadata } from "./insertMetadata";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -191,6 +192,20 @@ export const App = () => {
                             onClick={handleInsert}
                         >
                             Insert {'<'}when{'>'}s
+                        </Button>
+                        <Button 
+                            size='small'
+                            variant="outlined"
+                            disabled={midi === undefined}
+                            onClick={() => {
+                                if (!midi || !mei) return 
+
+                                const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
+                                insertMetadata(midi, meiDoc)
+                                setMEI(new XMLSerializer().serializeToString(meiDoc))
+                            }}
+                        >
+                            insert metadata
                         </Button>
                         <ToggleButtonGroup
                             size='small'
