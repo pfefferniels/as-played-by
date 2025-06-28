@@ -11,7 +11,7 @@ export const removeAllPedals = (mei: Document) => {
 export const insertWhen = (newMEI: Document, midiSpan: AnySpan, scoreNote: string) => {
   let recording = newMEI.querySelector('recording');
   if (!recording) {
-    console.log('no performance element found, creating one');
+    console.log('no recording element found, creating one');
     recording = newMEI.createElementNS('http://www.music-encoding.org/ns/mei', 'recording');
     const performance = newMEI.createElementNS('http://www.music-encoding.org/ns/mei', 'performance');
     const music = newMEI.querySelector('music');
@@ -21,6 +21,19 @@ export const insertWhen = (newMEI: Document, midiSpan: AnySpan, scoreNote: strin
     }
     music.appendChild(performance);
     performance.appendChild(recording);
+  }
+
+  for (const when of recording.querySelectorAll('when')) {
+    if (when.getAttribute('absolute') === (midiSpan.onsetMs.toFixed(0) + 'ms') &&
+      midiSpan.type === 'note' &&
+      when.querySelector('extData[type="velocity"]')?.textContent === midiSpan.velocity.toString()
+    ) {
+      let corresp = when.getAttribute('corresp');
+      if (!corresp) break;
+      corresp += ' ' + midiSpan.link || midiSpan.id;
+      when.setAttribute('corresp', corresp);
+      return
+    }
   }
 
   const when = newMEI.createElementNS('http://www.music-encoding.org/ns/mei', 'when');
