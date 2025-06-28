@@ -151,8 +151,6 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
     }
 
     const sorted = resultingSpans.sort((a, b) => a.onset - b.onset);
-
-    console.log(sorted.length, 'events within [', sorted[0].onset, sorted[sorted.length - 1].onset, ']')
     return sorted
 };
 

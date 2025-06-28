@@ -8,9 +8,9 @@ export const insertMetadata = (midi: MidiFile, meiDoc: Document) => {
     }
 
     let applicationName = ''
-    let textContent = ''
+    const list = meiDoc.createElementNS("http://www.music-encoding.org/ns/mei", "list");
     for (const track of midi.tracks) {
-        for (let i=0; i<track.length; i++) {
+        for (let i = 0; i < track.length; i++) {
             const event = track[i];
 
             if (event.type === 'meta' && event.subtype === 'text') {
@@ -18,7 +18,9 @@ export const insertMetadata = (midi: MidiFile, meiDoc: Document) => {
                     applicationName = event.text
                 }
                 else {
-                    textContent += event.text + ' ';
+                    const li = meiDoc.createElementNS("http://www.music-encoding.org/ns/mei", "li");
+                    li.textContent = event.text;
+                    list.appendChild(li);
                 }
             }
             else break
@@ -26,13 +28,17 @@ export const insertMetadata = (midi: MidiFile, meiDoc: Document) => {
     }
 
     const application = meiDoc.createElementNS("http://www.music-encoding.org/ns/mei", "application");
+    application.setAttribute("xml:id", "roll-emulation");
     const name = meiDoc.createElementNS("http://www.music-encoding.org/ns/mei", "name");
-    application.appendChild(name)
-    name.textContent = applicationName;
+    name.textContent = applicationName
 
     const p = meiDoc.createElementNS("http://www.music-encoding.org/ns/mei", "p");
-    p.textContent = textContent
-    application.appendChild(p);
+    const text = meiDoc.createTextNode("Parameters:");
+    p.appendChild(text);
+    p.appendChild(list);
+
+    application.appendChild(name)
+    application.appendChild(p)
 
     appInfo.appendChild(application);
 }
