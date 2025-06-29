@@ -8,11 +8,11 @@ import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { CodeEditor } from "./CodeEditor";
 import { OriginalMEI } from "./OriginalMEI";
-import { insertWhen } from "./When";
+import { insertRecording, insertWhen } from "./When";
 import { Info } from "@mui/icons-material";
 import InfoDialog from "./Info";
 import { insertPedals } from "./insertPedals";
-import { insertMetadata } from "./insertMetadata";
+import { insertMetadata, parseMetadata } from "./insertMetadata";
 
 interface Pair {
     label: 'match' | 'deletion' | 'insertion'
@@ -123,13 +123,19 @@ export const App = () => {
 
         const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
         const spans = asSpans(midi, true)
+        const recording = insertRecording(meiDoc, metadata?.source)
+        if (!recording) {
+            console.log('Failed creating recording')
+            return
+        }
+        
         for (const pair of pairs) {
             if (pair.label !== 'match') continue
 
             const span = spans.find(span => span.id === pair.performance_id)
             if (!span) continue
 
-            insertWhen(meiDoc, span, pair.score_id)
+            insertWhen(meiDoc, recording, span, pair.score_id)
         }
 
         insertPedals(
@@ -151,6 +157,8 @@ export const App = () => {
             scrollIntoView: true,
         })
     }
+
+    const metadata = midi && parseMetadata(midi)
 
     const toSVG = ([a, b]: [number, number]) => [(a - 100) * stretch, (110 - b) * 5] as [number, number]
 
@@ -196,12 +204,12 @@ export const App = () => {
                         <Button 
                             size='small'
                             variant="outlined"
-                            disabled={midi === undefined}
+                            disabled={!metadata}
                             onClick={() => {
-                                if (!midi || !mei) return 
+                                if (!metadata || !mei) return 
 
                                 const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
-                                insertMetadata(midi, meiDoc)
+                                insertMetadata(metadata, meiDoc)
                                 setMEI(new XMLSerializer().serializeToString(meiDoc))
                             }}
                         >
