@@ -7,41 +7,24 @@ import { VerovioToolkit } from 'verovio/esm'
 import { AnySpan } from "./MidiSpans";
 
 const shiftPath = (d: string, shiftX: number, shiftY: number): string => {
-  if (!d || typeof d !== 'string') return d;
-  
   let isX = true
-  try {
-    return d.replace(/-?\d+(\.\d+)?/g, (numStr) => {
-      const num = parseFloat(numStr)
-      if (isNaN(num)) return numStr; // Return original if not a valid number
-      
-      const shifted = isX ? num + shiftX : num + shiftY
-      isX = !isX
-      return shifted.toString()
-    })
-  } catch (error) {
-    console.warn('Error shifting path:', error)
-    return d; // Return original path if shifting fails
-  }
+  return d.replace(/-?\d+(\.\d+)?/g, (numStr) => {
+    const num = parseFloat(numStr)
+    const shifted = isX ? num + shiftX : num + shiftY
+    isX = !isX
+    return shifted.toString()
+  })
 }
 
 const parseTranslate = (transform: string): { x: number, y: number, regex: RegExp } | undefined => {
-  if (!transform || typeof transform !== 'string') return undefined;
-  
   const translateRegex = /translate\(\s*([-0-9.]+)(?:[ ,]\s*([-0-9.]+))?\s*\)/
   const match = transform.match(translateRegex)
-  if (!match) return undefined
+  if (!match) return
 
   const [, x, y = '0'] = match
-  const parsedX = parseFloat(x);
-  const parsedY = parseFloat(y);
-  
-  // Validate parsed numbers
-  if (isNaN(parsedX) || isNaN(parsedY)) return undefined;
-  
   return {
-    x: parsedX,
-    y: parsedY,
+    x: +x,
+    y: +y,
     regex: translateRegex
   }
 }
@@ -60,8 +43,6 @@ class Aligner {
 
   /**
    * Shifts a note horizontally and updates associated elements.
-   * Enhanced to handle multiple stem paths, flags, and ledger lines
-   * with comprehensive error handling.
    */
   shiftNote(note: SVGElement, newX: number) {
     const use = note.querySelector('use')
@@ -90,7 +71,7 @@ class Aligner {
       }
     }
 
-    // Find and shift ledger lines more robustly
+    // Find and shift ledger lines
     const dashes = this.getLedgerDashesFor(note)
     for (const dash of dashes) {
       const d = dash.getAttribute('d')
@@ -134,8 +115,6 @@ class Aligner {
 
   /**
    * Multiplies chord stems and distributes them to individual notes.
-   * Enhanced to handle various stem path formats and complex chord configurations.
-   * Provides better error handling and validation.
    */
   multiplyStems() {
     // chord stems live within .chord. Since 
@@ -194,8 +173,6 @@ class Aligner {
 
   /**
    * Redraws tie curves after note positions have been adjusted.
-   * Enhanced with dynamic calculations, safer coordinate parsing,
-   * and validation for minimum tie lengths and malformed paths.
    */
   redoTies() {
     const ties = this.svg.querySelectorAll('.tie');
@@ -267,8 +244,6 @@ class Aligner {
 
   /**
    * Redraws beam polygons after note positions have been adjusted.
-   * Enhanced to handle complex beam structures and multiple polygons per beam.
-   * Includes comprehensive error handling for edge cases.
    */
   redoBeams() {
     const beams = this.svg.querySelectorAll('.beam');
