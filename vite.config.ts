@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     fs: {
       // Allow serving files from one level up to the project root
-      allow: ['/Users'],
+      allow: ['/Users', '/home/runner/work'],
     },
   },
 })

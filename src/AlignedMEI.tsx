@@ -2,7 +2,7 @@
 
 import { loadVerovio } from "./loadVerovio.mjs";
 import { useState, useEffect, useLayoutEffect } from "react";
-import { usePiano } from "react-pianosound";
+// import { usePiano } from "react-pianosound";
 import { VerovioToolkit } from 'verovio/esm'
 import { AnySpan } from "./MidiSpans";
 
@@ -246,7 +246,7 @@ interface AlignedMEIProps {
 }
 
 export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: AlignedMEIProps) => {
-  const { playSingleNote } = usePiano()
+  // const { playSingleNote } = usePiano()
   const [svg, setSVG] = useState<string>('');
   const [toolkit, setToolkit] = useState<VerovioToolkit>()
 
@@ -327,7 +327,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
     aligner.redoTies();
     aligner.redoBeams();
     aligner.redoBarLines();
-  }, [svg, getSpanForNote, toSVG, highlight, onClick, mei, toolkit, playSingleNote]);
+  }, [svg, getSpanForNote, toSVG, highlight, onClick, mei, toolkit]);
 
   useEffect(() => {
     loadVerovio().then((toolkit) => {
