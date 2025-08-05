@@ -268,6 +268,8 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
 
     aligner.multiplyStems();
 
+    // Calculate the expected SVG width to match MidiViewer
+    let maxOnsetMs = 0;
     let lastSpan: AnySpan | undefined = undefined
     for (const note of notes) {
       const xmlId = note.getAttribute('xml:id')
@@ -294,6 +296,9 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
         continue
       }
       lastSpan = span
+
+      // Track the maximum offset for width calculation
+      maxOnsetMs = Math.max(maxOnsetMs, span.offsetMs);
 
       // set the opacity according to the velocity
       if ('velocity' in span) {
@@ -322,6 +327,12 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
           aligner.changeOpacity(endNote, span.velocity)
         }
       }
+    }
+
+    // Set the SVG width to match MidiViewer's calculated width
+    if (maxOnsetMs > 0) {
+      const expectedWidth = toSVG([maxOnsetMs, 0])[0] + 100;
+      svg.setAttribute('width', expectedWidth.toString());
     }
 
     aligner.redoTies();
