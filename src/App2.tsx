@@ -189,34 +189,32 @@ export const App = () => {
                                 />)}
                         </div>
 
-                        <div style={{ width: '50vw', overflow: 'scroll' }}>
-                            {mei && (
-                                <AlignedMEI
-                                    mei={mei}
-                                    getSpanForNote={(id: string) => {
-                                        if (!midi || pairs.length === 0) return
+                        {mei && (
+                            <AlignedMEI
+                                mei={mei}
+                                getSpanForNote={(id: string) => {
+                                    if (!midi || pairs.length === 0) return
 
-                                        const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
-                                        if (!pair) return
+                                    const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
+                                    if (!pair) return
 
-                                        if (pair.label === 'deletion') {
-                                            return 'deletion'
-                                        }
+                                    if (pair.label === 'deletion') {
+                                        return 'deletion'
+                                    }
 
-                                        const spans = asSpans(midi)
-                                        return spans.find(span => span.id === pair.performance_id)
-                                    }}
-                                    onClick={svgNote => {
-                                        if (!mei) return
+                                    const spans = asSpans(midi)
+                                    return spans.find(span => span.id === pair.performance_id)
+                                }}
+                                onClick={svgNote => {
+                                    if (!mei) return
 
-                                        const id = svgNote.getAttribute('data-id') || 'no-id'
-                                        if (mei.includes(id)) {
-                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                        }
-                                    }}
-                                    toSVG={toSVG}
-                                />)}
-                        </div>
+                                    const id = svgNote.getAttribute('data-id') || 'no-id'
+                                    if (mei.includes(id)) {
+                                        scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                    }
+                                }}
+                                toSVG={toSVG}
+                            />)}
                     </Box>
 
                     <Box>
