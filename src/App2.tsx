@@ -2,12 +2,11 @@ import { MidiFile, read } from "midifile-ts";
 import { useRef, useState } from "react";
 import { asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, IconButton, Slider, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
+import { Box, Button, FormControl, IconButton, Slider, Stack } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { CodeEditor } from "./CodeEditor";
-import { OriginalMEI } from "./OriginalMEI";
 import { insertRecording, insertWhen } from "./When";
 import { Info } from "@mui/icons-material";
 import InfoDialog from "./Info";
@@ -30,7 +29,6 @@ export const App = () => {
     const [pairs, setPairs] = useState<Pair[]>([])
 
     const [stretch, setStretch] = useState<number>(0.1);
-    const [mode, setMode] = useState<'original' | 'aligned'>('original');
 
     const [showHelp, setShowHelp] = useState(false)
 
@@ -46,7 +44,7 @@ export const App = () => {
         reader.onload = async (e) => {
             if (!e.target || !e.target.result) return;
 
-            setMEI(e.target.result as string)
+            setMEI(e.target.result as string);
         };
 
         reader.readAsText(file);
@@ -70,33 +68,45 @@ export const App = () => {
         reader.readAsArrayBuffer(file);
     };
 
-    const handleInsert = () => {
-        if (!midi || !mei) return
+    const handleAlign = () => {
+        if (!mei || !midi) return
 
-        const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
-        const spans = asSpans(midi, true)
-        const recording = insertRecording(meiDoc, metadata?.source)
-        if (!recording) {
-            console.log('Failed creating recording')
-            return
+        const perform = async () => {
+            const pairs = await getPairs(midi, mei)
+            if (!pairs) return
+
+            setPairs(pairs)
+
+            const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
+            const metadata = parseMetadata(midi)
+            insertMetadata(metadata, meiDoc)
+
+            const spans = asSpans(midi, true)
+            const recording = insertRecording(meiDoc, metadata?.source)
+            if (!recording) {
+                console.log('Failed creating recording')
+                return
+            }
+
+            for (const pair of pairs) {
+                if (pair.label !== 'match') continue
+
+                const span = spans.find(span => span.id === pair.performance_id)
+                if (!span) continue
+
+                insertWhen(meiDoc, recording, span, pair.score_id)
+            }
+
+            insertPedals(
+                spans.filter(span => span.type === 'soft' || span.type === 'sustain'),
+                [],
+                meiDoc
+            )
+
+            setMEI(new XMLSerializer().serializeToString(meiDoc))
         }
 
-        for (const pair of pairs) {
-            if (pair.label !== 'match') continue
-
-            const span = spans.find(span => span.id === pair.performance_id)
-            if (!span) continue
-
-            insertWhen(meiDoc, recording, span, pair.score_id)
-        }
-
-        insertPedals(
-            spans.filter(span => span.type === 'soft' || span.type === 'sustain'),
-            [],
-            meiDoc
-        )
-
-        setMEI(new XMLSerializer().serializeToString(meiDoc))
+        perform()
     }
 
     const scrollToRange = (left: number, right: number) => {
@@ -109,8 +119,6 @@ export const App = () => {
             scrollIntoView: true,
         })
     }
-
-    const metadata = midi && parseMetadata(midi)
 
     const toSVG = ([a, b]: [number, number]) => [(a - 100) * stretch, (110 - b) * 5] as [number, number]
 
@@ -129,6 +137,12 @@ export const App = () => {
                             <input type="file" hidden accept=".midi,.mid" onChange={handleMIDI} />
                         </Button>
 
+                        {(mei && midi) && (
+                            <Button variant="contained" onClick={handleAlign}>
+                                Align
+                            </Button>
+                        )}
+
                         <IconButton onClick={() => setShowHelp(true)}>
                             <Info />
                         </IconButton>
@@ -136,57 +150,6 @@ export const App = () => {
                 </Box>
 
                 <Box>
-                    <Stack spacing={1} direction='row'>
-                        <Button
-                            size='small'
-                            disabled={!mei || !midi}
-                            variant="outlined"
-                            onClick={async () => {
-                                if (!midi || !mei) return
-
-                                const pairs = await getPairs(midi, mei)
-                                if (pairs) setPairs(pairs)
-                            }}
-                        >
-                            Align
-                        </Button>
-                        <Button
-                            size='small'
-                            variant="outlined"
-                            disabled={pairs.length === 0}
-                            onClick={handleInsert}
-                        >
-                            Insert {'<'}when{'>'}s
-                        </Button>
-                        <Button
-                            size='small'
-                            variant="outlined"
-                            disabled={!metadata}
-                            onClick={() => {
-                                if (!metadata || !mei) return
-
-                                const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
-                                insertMetadata(metadata, meiDoc)
-                                setMEI(new XMLSerializer().serializeToString(meiDoc))
-                            }}
-                        >
-                            insert metadata
-                        </Button>
-                        <ToggleButtonGroup
-                            size='small'
-                            value={mode}
-                            exclusive
-                            onChange={(_, value) => setMode(value as 'original' | 'aligned')}
-                            aria-label="alignment"
-                        >
-                            <ToggleButton value="original" aria-label="original">
-                                Original
-                            </ToggleButton>
-                            <ToggleButton value="aligned" aria-label="aligned" disabled={pairs.length === 0}>
-                                Aligned
-                            </ToggleButton>
-                        </ToggleButtonGroup>
-                    </Stack>
                     {pairs.length > 0 && (
                         <span style={{ color: 'gray' }}>
                             ({pairs.filter(p => p.label === 'match').length} matches,{' '}
@@ -227,44 +190,32 @@ export const App = () => {
                         </div>
 
                         <div style={{ width: '50vw', overflow: 'scroll' }}>
-                            {(mei && mode === 'aligned')
-                                ? (
-                                    <AlignedMEI
-                                        mei={mei}
-                                        getSpanForNote={(id: string) => {
-                                            if (!midi || pairs.length === 0) return
+                            {mei && (
+                                <AlignedMEI
+                                    mei={mei}
+                                    getSpanForNote={(id: string) => {
+                                        if (!midi || pairs.length === 0) return
 
-                                            const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
-                                            if (!pair) return
+                                        const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
+                                        if (!pair) return
 
-                                            if (pair.label === 'deletion') {
-                                                return 'deletion'
-                                            }
+                                        if (pair.label === 'deletion') {
+                                            return 'deletion'
+                                        }
 
-                                            const spans = asSpans(midi)
-                                            return spans.find(span => span.id === pair.performance_id)
-                                        }}
-                                        onClick={svgNote => {
-                                            if (!mei) return
+                                        const spans = asSpans(midi)
+                                        return spans.find(span => span.id === pair.performance_id)
+                                    }}
+                                    onClick={svgNote => {
+                                        if (!mei) return
 
-                                            const id = svgNote.getAttribute('data-id') || 'no-id'
-                                            if (mei.includes(id)) {
-                                                scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                            }
-                                        }}
-                                        toSVG={toSVG}
-                                    />)
-                                : (
-                                    <OriginalMEI
-                                        mei={mei || ''}
-                                        onClick={(id: string) => {
-                                            if (!mei) return
-
-                                            if (mei.includes(id)) {
-                                                scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                            }
-                                        }}
-                                    />)}
+                                        const id = svgNote.getAttribute('data-id') || 'no-id'
+                                        if (mei.includes(id)) {
+                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                        }
+                                    }}
+                                    toSVG={toSVG}
+                                />)}
                         </div>
                     </Box>
 
