@@ -58,6 +58,11 @@ class Aligner {
     this.svg = svg;
   }
 
+  /**
+   * Shifts a note horizontally and updates associated elements.
+   * Enhanced to handle multiple stem paths, flags, and ledger lines
+   * with comprehensive error handling.
+   */
   shiftNote(note: SVGElement, newX: number) {
     const use = note.querySelector('use')
     if (!use) return
@@ -127,6 +132,11 @@ class Aligner {
     }
   }
 
+  /**
+   * Multiplies chord stems and distributes them to individual notes.
+   * Enhanced to handle various stem path formats and complex chord configurations.
+   * Provides better error handling and validation.
+   */
   multiplyStems() {
     // chord stems live within .chord. Since 
     // every note of a chord will be in another
@@ -182,6 +192,11 @@ class Aligner {
       });
   }
 
+  /**
+   * Redraws tie curves after note positions have been adjusted.
+   * Enhanced with dynamic calculations, safer coordinate parsing,
+   * and validation for minimum tie lengths and malformed paths.
+   */
   redoTies() {
     const ties = this.svg.querySelectorAll('.tie');
     for (const tie of ties) {
@@ -250,6 +265,11 @@ class Aligner {
     }
   }
 
+  /**
+   * Redraws beam polygons after note positions have been adjusted.
+   * Enhanced to handle complex beam structures and multiple polygons per beam.
+   * Includes comprehensive error handling for edge cases.
+   */
   redoBeams() {
     const beams = this.svg.querySelectorAll('.beam');
     for (const beam of beams) {
