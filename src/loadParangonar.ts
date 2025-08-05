@@ -78,8 +78,9 @@ export const getPairs = async (midi: MidiFile, mei: string) => {
     const spans = midiSpansForParangonar(midi)
     for (const { onsetSec, durationSec, pitch, velocity, id } of spans) {
         const perfNote = parangonarModule.createPerformanceNote(
-            (onsetSec - 28), durationSec, pitch, velocity, id
+            onsetSec, durationSec, pitch, velocity, id
         )
+
         perfNotes.push_back(perfNote);
     }
 
@@ -120,6 +121,7 @@ export const getPairs = async (midi: MidiFile, mei: string) => {
             )
         })
         .forEach((scoreNote) => {
+            console.log('using', scoreNote)
             scoreNotes.push_back(scoreNote)
         })
 
@@ -127,6 +129,7 @@ export const getPairs = async (midi: MidiFile, mei: string) => {
     const config = new parangonarModule.AutomaticNoteMatcherConfig();
     config.sfuzziness = 4.0;
     config.pfuzziness = 4.0;
+
 
     // Perform alignment
     const alignment = parangonarModule.align(scoreNotes, perfNotes, config);

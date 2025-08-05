@@ -187,34 +187,34 @@ export const App = () => {
                                         }) !== -1
                                     }}
                                 />)}
+
+                            {mei && (
+                                <AlignedMEI
+                                    mei={mei}
+                                    getSpanForNote={(id: string) => {
+                                        if (!midi || pairs.length === 0) return
+
+                                        const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
+                                        if (!pair) return
+
+                                        if (pair.label === 'deletion') {
+                                            return 'deletion'
+                                        }
+
+                                        const spans = asSpans(midi)
+                                        return spans.find(span => span.id === pair.performance_id)
+                                    }}
+                                    onClick={svgNote => {
+                                        if (!mei) return
+
+                                        const id = svgNote.getAttribute('data-id') || 'no-id'
+                                        if (mei.includes(id)) {
+                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
+                                        }
+                                    }}
+                                    toSVG={([x, y]) => toSVG([(x - 500) * 10, y])}
+                                />)}
                         </div>
-
-                        {mei && (
-                            <AlignedMEI
-                                mei={mei}
-                                getSpanForNote={(id: string) => {
-                                    if (!midi || pairs.length === 0) return
-
-                                    const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
-                                    if (!pair) return
-
-                                    if (pair.label === 'deletion') {
-                                        return 'deletion'
-                                    }
-
-                                    const spans = asSpans(midi)
-                                    return spans.find(span => span.id === pair.performance_id)
-                                }}
-                                onClick={svgNote => {
-                                    if (!mei) return
-
-                                    const id = svgNote.getAttribute('data-id') || 'no-id'
-                                    if (mei.includes(id)) {
-                                        scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                    }
-                                }}
-                                toSVG={toSVG}
-                            />)}
                     </Box>
 
                     <Box>

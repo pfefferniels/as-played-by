@@ -334,6 +334,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       toolkit.setOptions({
         adjustPageHeight: true,
         adjustPageWidth: true,
+        scale: 100,
         breaks: 'none',
         svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n', 'note@corresp'],
         appXPathQuery: ['./rdg[contains(@source, "performance")]'],
@@ -349,7 +350,6 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
   return (
     <div
       id='scoreDiv'
-      style={{ width: '50vw', overflow: 'scroll' }}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   )
