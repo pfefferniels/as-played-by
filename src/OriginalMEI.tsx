@@ -28,7 +28,6 @@ export const OriginalMEI = ({ mei, highlight, onClick }: OriginalMEIProps) => {
         }
 
         Array.from(svg.querySelectorAll('.note')).forEach(note => {
-            console.log('note=', note)
             const xmlId = note.getAttribute('id')
             if (!xmlId) return
 

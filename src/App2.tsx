@@ -1,6 +1,6 @@
 import { MidiFile, read } from "midifile-ts";
 import { useRef, useState } from "react";
-import { asSpans, midiSpansForParangonar } from "./MidiSpans";
+import { asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
 import { Box, Button, FormControl, IconButton, Slider, Stack, ToggleButton, ToggleButtonGroup } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -13,24 +13,20 @@ import { Info } from "@mui/icons-material";
 import InfoDialog from "./Info";
 import { insertPedals } from "./insertPedals";
 import { insertMetadata, parseMetadata } from "./insertMetadata";
+import { getPairs, Pair } from "./loadParangonar";
 
-interface Pair {
-    label: 'match' | 'deletion' | 'insertion'
-    performance_id: string
-    score_id: string
-}
-
-const isPair = (pair: Partial<Pair>): pair is Pair => {
+/*const isPair = (pair: Partial<Pair>): pair is Pair => {
     if (!('label' in pair)) return false
     if (pair.label === 'match') return 'performance_id' in pair && 'score_id' in pair
     else if (pair.label === 'deletion') return 'score_id' in pair
     else if (pair.label === 'insertion') return 'performance_id' in pair
     return false
-}
+}*/
 
 export const App = () => {
     const [mei, setMEI] = useState<string>()
     const [midi, setMIDI] = useState<MidiFile>()
+    const [midiFileName, setMidiFileName] = useState<string>('')
     const [pairs, setPairs] = useState<Pair[]>([])
 
     const [stretch, setStretch] = useState<number>(0.1);
@@ -62,6 +58,7 @@ export const App = () => {
         const file = event.target.files[0];
         if (!file) return;
 
+        setMidiFileName(file.name)
         const reader = new FileReader();
         reader.onload = (e) => {
             if (!e.target) return;
@@ -73,51 +70,6 @@ export const App = () => {
         reader.readAsArrayBuffer(file);
     };
 
-    const alignWithParangonar = async () => {
-        if (!midi || !mei) return
-
-        const spans = midiSpansForParangonar(midi)
-
-        const formData = new FormData()
-
-        // make sure to only select performed notes
-        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
-        meiDoc.querySelectorAll('app').forEach((app) => {
-            const perfRdg = app.querySelector('rdg[source="performance"]')
-            if (!perfRdg) {
-                // partitura, on which parangonar is based, 
-                // does not digest <app> elements: make sure
-                // there are none left
-                app.remove()
-                return
-            }
-
-            app.replaceWith(...perfRdg.childNodes)
-        })
-
-        formData.append('mei', new XMLSerializer().serializeToString(meiDoc))
-        formData.append('midi', JSON.stringify(spans))
-
-        fetch('http://localhost:5000/align', {
-            method: 'POST',
-            body: formData
-        }).then(res => res.json())
-            .then(data => {
-                if (!data || !Array.isArray(data) || !data.every(entry => isPair(entry))) {
-                    console.log('Malformed data provoded')
-                    return
-                }
-
-                setPairs(data.map(pair => {
-                    if ('score_id' in pair && pair.score_id.indexOf('_') !== -1) {
-                        pair.score_id = pair.score_id.slice(pair.score_id.indexOf('_') + 1)
-                    }
-
-                    return pair
-                }))
-            })
-    }
-
     const handleInsert = () => {
         if (!midi || !mei) return
 
@@ -128,7 +80,7 @@ export const App = () => {
             console.log('Failed creating recording')
             return
         }
-        
+
         for (const pair of pairs) {
             if (pair.label !== 'match') continue
 
@@ -173,7 +125,7 @@ export const App = () => {
                         </Button>
 
                         <Button variant="outlined" component="label">
-                            Upload MIDI
+                            {midiFileName || 'Upload MIDI'}
                             <input type="file" hidden accept=".midi,.mid" onChange={handleMIDI} />
                         </Button>
 
@@ -189,7 +141,12 @@ export const App = () => {
                             size='small'
                             disabled={!mei || !midi}
                             variant="outlined"
-                            onClick={alignWithParangonar}
+                            onClick={async () => {
+                                if (!midi || !mei) return
+
+                                const pairs = await getPairs(midi, mei)
+                                if (pairs) setPairs(pairs)
+                            }}
                         >
                             Align
                         </Button>
@@ -201,12 +158,12 @@ export const App = () => {
                         >
                             Insert {'<'}when{'>'}s
                         </Button>
-                        <Button 
+                        <Button
                             size='small'
                             variant="outlined"
                             disabled={!metadata}
                             onClick={() => {
-                                if (!metadata || !mei) return 
+                                if (!metadata || !mei) return
 
                                 const meiDoc = new DOMParser().parseFromString(mei, 'text/xml')
                                 insertMetadata(metadata, meiDoc)
@@ -262,8 +219,9 @@ export const App = () => {
                                     toSVG={toSVG}
                                     isInsertion={(id: string) => {
                                         if (!pairs.length) return false
-                                        const pair = pairs.find(pair => pair.performance_id === id)
-                                        return pair?.label === 'insertion' || false
+                                        return pairs.findIndex(pair => {
+                                            pair.label === 'insertion' && pair.performance_id === id
+                                        }) !== -1
                                     }}
                                 />)}
                         </div>
@@ -276,10 +234,7 @@ export const App = () => {
                                         getSpanForNote={(id: string) => {
                                             if (!midi || pairs.length === 0) return
 
-                                            console.log(pairs)
-
-                                            const pair = pairs.find(pair => pair.score_id === id)
-                                            console.log('pair', pair)
+                                            const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
                                             if (!pair) return
 
                                             if (pair.label === 'deletion') {
@@ -289,10 +244,10 @@ export const App = () => {
                                             const spans = asSpans(midi)
                                             return spans.find(span => span.id === pair.performance_id)
                                         }}
-                                        onClick={(id: string) => {
-                                            console.log(id, 'clicked')
+                                        onClick={svgNote => {
                                             if (!mei) return
 
+                                            const id = svgNote.getAttribute('data-id') || 'no-id'
                                             if (mei.includes(id)) {
                                                 scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
                                             }

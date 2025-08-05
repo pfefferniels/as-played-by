@@ -163,16 +163,12 @@ export const midiSpansForParangonar = (midi: MidiFile) => {
         .map(span => {
             // format: { onset, duration, onset_tick, duration_tick, pitch, velocity, track, channel, id }
 
-            return [
-                span.onsetMs / 1000,
-                (span.offsetMs - span.onsetMs) / 1000,
-                span.onset,
-                span.offset - span.onset,
-                span.pitch,
-                span.velocity,
-                1,
-                span.channel,
-                span.id
-            ]
+            return {
+                onsetSec: span.onsetMs / 1000,
+                durationSec: (span.offsetMs - span.onsetMs) / 1000,
+                pitch: span.pitch,
+                velocity: span.velocity,
+                id: span.id
+            }
         })
 }
