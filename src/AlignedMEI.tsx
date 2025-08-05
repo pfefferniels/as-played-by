@@ -349,7 +349,12 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
   return (
     <div
       id='scoreDiv'
-      style={{ position: 'absolute', height: '10vh' }}
+      style={{ 
+        width: '100%', 
+        height: '390px', 
+        overflow: 'auto',
+        position: 'relative'
+      }}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   )

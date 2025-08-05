@@ -49,7 +49,16 @@ export const OriginalMEI = ({ mei, highlight, onClick }: OriginalMEIProps) => {
     }, [mei, vrvToolkit])
 
     return (
-        <div id='scoreDiv' dangerouslySetInnerHTML={{ __html: svg }} />
+        <div 
+            id='scoreDiv' 
+            style={{ 
+                width: '100%', 
+                height: '390px', 
+                overflow: 'auto',
+                position: 'relative'
+            }}
+            dangerouslySetInnerHTML={{ __html: svg }} 
+        />
     )
 }
 

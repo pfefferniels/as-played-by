@@ -69,7 +69,20 @@ export type Pair =
     }
 
 export const getPairs = async (midi: MidiFile, mei: string) => {
-    // Mock implementation - return empty pairs for now
+    // Mock implementation - create some test alignment pairs
     console.log('Mock getPairs called with:', { midi, mei });
-    return [];
+    
+    // Create mock alignment data matching our test files
+    const pairs: Pair[] = [
+        { label: 'match', performance_id: '0-0-60', score_id: 'note1' },
+        { label: 'match', performance_id: '0-480-62', score_id: 'note2' },
+        { label: 'match', performance_id: '0-960-64', score_id: 'note3' },
+        { label: 'match', performance_id: '0-1440-65', score_id: 'note4' },
+        { label: 'match', performance_id: '0-1920-67', score_id: 'note5' },
+        { label: 'match', performance_id: '0-2400-69', score_id: 'note6' },
+        { label: 'match', performance_id: '0-2880-71', score_id: 'note7' },
+        { label: 'match', performance_id: '0-3360-72', score_id: 'note8' },
+    ];
+    
+    return pairs;
 }

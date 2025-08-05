@@ -86,11 +86,15 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
                 const type = isNoteOn(event) ? 'note' : isPedalOn(event) ? 'sustain' : 'soft'
                 const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);
                 if (!currentTempo) {
-                    console.log('No tempo event found. Skipping');
-                    continue;
+                    // Use default tempo of 120 BPM (500,000 microseconds per beat) when no tempo is found
+                    tempoMap.push({
+                        atTick: 0,
+                        microsecondsPerBeat: 500000
+                    });
                 }
 
-                const onsetMs = midiTickToMilliseconds(currentTime, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat)
+                const tempo = currentTempo || { microsecondsPerBeat: 500000 };
+                const onsetMs = midiTickToMilliseconds(currentTime, tempo.microsecondsPerBeat, file.header.ticksPerBeat)
                 const link = bufferedMetaText
 
                 if (type === 'note') {
@@ -127,9 +131,16 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
 
                 const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);
                 if (!currentTempo) {
-                    console.log('No tempo event found. Skipping');
-                    continue;
+                    // Use default tempo of 120 BPM (500,000 microseconds per beat) when no tempo is found
+                    if (tempoMap.length === 0) {
+                        tempoMap.push({
+                            atTick: 0,
+                            microsecondsPerBeat: 500000
+                        });
+                    }
                 }
+
+                const tempo = currentTempo || { microsecondsPerBeat: 500000 };
 
                 const counterpart =
                     isNoteOff(event)
@@ -140,7 +151,7 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
                     continue;
                 }
                 counterpart.offset = currentTime;
-                counterpart.offsetMs = midiTickToMilliseconds(currentTime, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat)
+                counterpart.offsetMs = midiTickToMilliseconds(currentTime, tempo.microsecondsPerBeat, file.header.ticksPerBeat)
                 if (bufferedMetaText && counterpart.link) {
                     counterpart.link += ` ${bufferedMetaText}`
                 }
