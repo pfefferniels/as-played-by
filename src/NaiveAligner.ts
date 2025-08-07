@@ -55,7 +55,15 @@ export const naiveAligner = (
     scoreNotes: ScoreNote[],
     perfNotes: AnySpan[]
 ): Pair[] => {
-    const chords = Map.groupBy(scoreNotes, (note) => note.onset);
+    // Group notes by onset time
+    const chordMap = new Map<number, ScoreNote[]>();
+    for (const note of scoreNotes) {
+        if (!chordMap.has(note.onset)) {
+            chordMap.set(note.onset, []);
+        }
+        chordMap.get(note.onset)!.push(note);
+    }
+    const chords = chordMap;
 
     const tmpPerfNotes = [...perfNotes]
         .filter(span => span.type === 'note')

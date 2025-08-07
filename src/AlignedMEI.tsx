@@ -174,7 +174,7 @@ class Aligner {
           polygon.setAttribute('data-share', share.toString());
           return { polygon, share }
         })
-        .forEach(({ polygon, share }, i) => {
+        .forEach(({ polygon }) => {
           const points = polygon.getAttribute('points');
           if (!points) return;
 
@@ -304,16 +304,22 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
   const { playSingleNote } = usePiano()
   const [svg, setSVG] = useState<string>('');
   const [toolkit, setToolkit] = useState<VerovioToolkit>()
+  const [svgRendered, setSvgRendered] = useState<boolean>(false);
 
   useLayoutEffect(() => {
     console.log('use layout')
-    const svg = document.querySelector('#scoreDiv svg') as SVGSVGElement | null;
-    if (!svg || !toolkit) return;
+    const svgElement = document.querySelector('#scoreDiv svg') as SVGSVGElement | null;
+    if (!svgElement || !toolkit || !svgRendered) return;
 
-    const aligner = new Aligner(svg);
+    // Clear any previous modifications to ensure we work with fresh SVG
+    svgElement.querySelectorAll('[data-modified]').forEach(element => {
+      element.removeAttribute('data-modified');
+    });
+
+    const aligner = new Aligner(svgElement);
 
     // hide certain things
-    const elementsToHide = svg.querySelectorAll('.clef, .meterSig, .flag, .dots, .rest, .accid, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir');
+    const elementsToHide = svgElement.querySelectorAll('.clef, .meterSig, .flag, .dots, .rest, .accid, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir');
     elementsToHide.forEach(el => {
       (el as SVGGraphicsElement).style.display = 'none';
     });
@@ -329,7 +335,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       const xmlId = note.getAttribute('xml:id')
       if (!xmlId) continue
 
-      const svgNote = svg?.querySelector(`[data-id="${xmlId}"]`) as SVGElement | null
+      const svgNote = svgElement?.querySelector(`[data-id="${xmlId}"]`) as SVGElement | null
       if (!svgNote) {
         console.log('No corresponding SVG note found for', xmlId)
         continue
@@ -391,9 +397,10 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
     aligner.redoTies();
     aligner.redoBeams();
     aligner.redoBarLines();
-  }, [svg, getSpanForNote, toSVG, highlight, onClick, mei, toolkit, playSingleNote]);
+  }, [svg, getSpanForNote, toSVG, highlight, onClick, mei, toolkit, playSingleNote, svgRendered]);
 
   useEffect(() => {
+    setSvgRendered(false); // Reset flag when MEI changes
     loadVerovio().then((toolkit) => {
       toolkit.setOptions({
         adjustPageHeight: true,
@@ -412,6 +419,16 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       setToolkit(toolkit)
     })
   }, [mei])
+
+  // Set svgRendered flag after SVG is updated in DOM
+  useEffect(() => {
+    if (svg) {
+      // Use a microtask to ensure the DOM has been updated
+      queueMicrotask(() => {
+        setSvgRendered(true);
+      });
+    }
+  }, [svg])
 
   return (
     <div

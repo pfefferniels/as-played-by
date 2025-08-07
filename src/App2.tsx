@@ -2,7 +2,7 @@ import { MidiFile, read } from "midifile-ts";
 import { useEffect, useRef, useState } from "react";
 import { asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, FormLabel, IconButton, Slider, Stack, Typography } from "@mui/material"
+import { Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
