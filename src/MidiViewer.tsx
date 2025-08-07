@@ -35,7 +35,7 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
                     <stop
                         offset="0%"
                         stopColor="white"
-                        stopOpacity={0.2}
+                        stopOpacity={0.5}
                     />
                     <stop
                         offset={`${Math.min(1, 2000 / (lastOffsetMs - (spans[0]?.onsetMs || 0))) * 100}%`}
@@ -109,7 +109,7 @@ const Note = ({ toSVG, span, highlight, onClick }: NoteProps) => {
     return (
         <rect
             className='midiNote'
-            fill={hovered ? 'red' : 'gray'}
+            fill={hovered ? 'red' : 'rgba(0, 0, 0, 0.8)'}
             strokeWidth={hovered ? 2 : highlight ? 7 : 0.5}
             stroke={hovered ? 'black' : 'gray'}
             x={point1[0]}

@@ -2,3 +2,7 @@
 .pgHead {
     display: none;
 }
+
+.flag, .dots, .rest, .accid, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir, .tupletNum, .tupletBracket {
+    display: none;
+}

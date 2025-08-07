@@ -2,7 +2,7 @@ import { MidiFile, read } from "midifile-ts";
 import { useEffect, useRef, useState } from "react";
 import { asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, FormLabel, IconButton, Slider, Stack, Typography } from "@mui/material"
+import { Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
@@ -31,7 +31,7 @@ export const App = () => {
     const [midi, setMIDI] = useState<MidiFile>()
     const [midiFileName, setMidiFileName] = useState<string>('')
     const [pairs, setPairs] = useState<Pair[]>([])
-    const [stretch, setStretch] = useState<number>(0.1);
+    const [stretch, setStretch] = useState<number>(0.05);
     const [showHelp, setShowHelp] = useState(false)
 
     const editorRef = useRef<ReactCodeMirrorRef>(null)
@@ -81,21 +81,16 @@ export const App = () => {
         reader.readAsArrayBuffer(file);
     };
 
-    const handleAlign = () => {
+    useEffect(() => {
         if (!mei || !midi) return
 
         const perform = async () => {
             setPairs(naiveAligner(await getNotesFromMEI(mei), asSpans(midi, true)))
         }
         perform()
+    }, [mei, midi])
 
-        /*
-        
-                    setMEI(new XMLSerializer().serializeToString(meiDoc))
-                    */
-    }
-
-    const handleDownload = () => {
+    const handleFinalize = () => {
         if (!mei || !midi) return
 
         const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
@@ -124,9 +119,12 @@ export const App = () => {
             meiDoc
         )
 
-        const text = new XMLSerializer().serializeToString(meiDoc);
+        setMEI(new XMLSerializer().serializeToString(meiDoc))
+    };
 
-        const blob = new Blob([text], { type: 'application/xml' });
+    const handleDownload = () => {
+        if (!mei) return
+        const blob = new Blob([mei], { type: 'application/xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -135,7 +133,7 @@ export const App = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    };
+    }
 
     const scrollToRange = (left: number, right: number) => {
         if (!editorRef.current || !editorRef.current.state?.doc) {
@@ -148,7 +146,7 @@ export const App = () => {
         })
     }
 
-    const toSVG = ([a, b]: [number, number]) => [a * stretch, (100 - b) * 10] as [number, number]
+    const toSVG = ([a, b]: [number, number]) => [a * stretch + 20, (100 - b) * 8] as [number, number]
 
     const insertedSpans = (midi && pairs.length > 0) ? asSpans(midi, true).filter(span => {
         return pairs.some(pair => pair.label === 'insertion' && pair.performance_id === span.id)
@@ -197,8 +195,8 @@ export const App = () => {
 
                         {(mei && midi) && (
                             <>
-                                <Button variant="contained" onClick={handleAlign}>
-                                    Align
+                                <Button variant="contained" onClick={handleFinalize}>
+                                    Finalize
                                 </Button>
                                 <Button variant='contained' size='small' onClick={handleDownload} startIcon={<Download />}>
                                     Download
@@ -217,10 +215,10 @@ export const App = () => {
                                 </Typography>
                                 <FormControl sx={{ alignSelf: 'center' }}>
                                     <Slider
-                                        sx={{ width: '10rem' }}
+                                        sx={{ width: '5rem' }}
                                         min={0.01}
                                         max={0.2}
-                                        step={0.01}
+                                        step={0.005}
                                         value={stretch}
                                         onChange={(_, value) => setStretch(value as number)}
                                         valueLabelDisplay="auto"
@@ -270,7 +268,7 @@ export const App = () => {
                                             scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
                                         }
                                     }}
-                                    toSVG={([x, y]) => toSVG([x * 14, y])}
+                                    stretchX={stretch * 14}
                                 />)}
 
                             <MidiViewer
@@ -291,7 +289,7 @@ export const App = () => {
                                     const accid = accArr.join("");
                                     const oct = Math.floor(pitch / 12) - 1;
 
-                                    const meiNote = `<note pname="${pname}" oct="${oct}" xml:id="${span.id}" dur="4" stem.dir="up" accid="${accid}" />\n`;
+                                    const meiNote = `<note pname="${pname}" oct="${oct}" xml:id="${span.id}" stem.dir="up" accid="${accid}" />\n`;
 
                                     view.dispatch({
                                         changes: { from: head, insert: meiNote },
@@ -304,23 +302,25 @@ export const App = () => {
                         </div>
                     </Box>
 
-                    <Box
-                        style={{
-                            position: 'absolute',
-                            right: '1rem',
-                            backgroundColor: 'rgba(255, 255, 255)',
-                            padding: '15px 30px',
-                            borderRadius: '10px',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            boxShadow: '0 10px 20px 0 rgba(0, 0, 0, 0.3)',
-                        }}
-                    >
-                        <CodeEditor
-                            mei={mei || ''}
-                            onSave={setMEI}
-                            ref={editorRef}
-                        />
-                    </Box>
+                    {mei && (
+                        <Box
+                            style={{
+                                position: 'absolute',
+                                right: '1rem',
+                                backgroundColor: 'rgba(255, 255, 255)',
+                                padding: '15px 30px',
+                                borderRadius: '10px',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                boxShadow: '0 10px 20px 0 rgba(0, 0, 0, 0.3)',
+                            }}
+                        >
+                            <CodeEditor
+                                mei={mei || ''}
+                                onSave={setMEI}
+                                ref={editorRef}
+                            />
+                        </Box>
+                    )}
                 </Stack>
             </Stack>
 
