@@ -300,14 +300,14 @@ interface AlignedMEIProps {
   onClick: (svgNote: SVGElement) => void
 }
 
-export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: AlignedMEIProps) => {
-  const { playSingleNote } = usePiano()
+export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight: _highlight, onClick }: AlignedMEIProps) => {
+  usePiano() // Keep the hook call for context
   const [svg, setSVG] = useState<string>('');
   const [toolkit, setToolkit] = useState<VerovioToolkit>()
   const [svgRendered, setSvgRendered] = useState<boolean>(false);
 
   useLayoutEffect(() => {
-    console.log('use layout')
+    console.log('use layout - initialization')
     const svgElement = document.querySelector('#scoreDiv svg') as SVGSVGElement | null;
     if (!svgElement || !toolkit || !svgRendered) return;
 
@@ -324,11 +324,23 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       (el as SVGGraphicsElement).style.display = 'none';
     });
 
+    aligner.multiplyStems();
+    aligner.redoTies();
+    aligner.redoBeams();
+    aligner.redoBarLines();
+  }, [mei, toolkit, svgRendered]);
+
+  // Separate effect for note processing that depends on external functions
+  useLayoutEffect(() => {
+    console.log('use layout - note processing')
+    const svgElement = document.querySelector('#scoreDiv svg') as SVGSVGElement | null;
+    if (!svgElement || !toolkit || !svgRendered) return;
+
+    const aligner = new Aligner(svgElement);
+
     // displace notes based on matched pairs
     const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
     const notes = meiDoc.querySelectorAll('note')
-
-    aligner.multiplyStems();
 
     //let lastSpan: AnySpan | undefined = undefined
     for (const note of notes) {
@@ -393,11 +405,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
         }
       }
     }
-
-    aligner.redoTies();
-    aligner.redoBeams();
-    aligner.redoBarLines();
-  }, [svg, getSpanForNote, toSVG, highlight, onClick, mei, toolkit, playSingleNote, svgRendered]);
+  }, [mei, toolkit, svgRendered, getSpanForNote, toSVG, onClick]);
 
   useEffect(() => {
     setSvgRendered(false); // Reset flag when MEI changes
