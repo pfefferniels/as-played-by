@@ -1,35 +1,66 @@
-import { MidiFile } from "midifile-ts";
-import { useEffect, useRef, useState } from "react";
-import { AnySpan, asSpans, NoteSpan } from "./MidiSpans";
+import { useRef, useState } from "react";
+import { AnySpan, NoteSpan } from "./MidiSpans";
+import { usePiano } from "react-pianosound";
 // import { usePiano } from "react-pianosound"
 
 export type Point = [number, number]
 
 interface MidiViewerProps {
-    file: MidiFile
+    spans: AnySpan[]
     toSVG: (point: Point) => Point
     height: number
     highlight?: AnySpan
-    isInsertion: (id: string) => boolean
+    onClick: (span: AnySpan, e: React.MouseEvent) => void
 }
 
-export const MidiViewer = ({ file, toSVG, height, highlight, isInsertion }: MidiViewerProps) => {
-    // const { playSingleNote } = usePiano()
-    const [spans, setSpans] = useState<AnySpan[]>([])
-
+export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiViewerProps) => {
     const svgRef = useRef<SVGSVGElement>(null)
-
-    useEffect(() => {
-        setSpans(asSpans(file, true))
-    }, [file])
 
     const lastOffsetMs = Math.max(...spans.map(span => span.offsetMs))
     const lastPoint = toSVG([lastOffsetMs || 0, 0])
 
+    spans.sort((a, b) => {
+        return a.onsetMs - b.onsetMs;
+    });
+
     return (
-        <svg width={lastPoint[0] + 100} height={height} ref={svgRef}>
+        <svg
+            width={lastPoint[0] + 100}
+            height={height}
+            ref={svgRef}
+            style={{ position: 'absolute', top: 0, left: 0 }}
+        >
+            <defs>
+                <linearGradient id="timeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop
+                        offset="0%"
+                        stopColor="white"
+                        stopOpacity={0.2}
+                    />
+                    <stop
+                        offset={`${Math.min(1, 2000 / (lastOffsetMs - (spans[0]?.onsetMs || 0))) * 100}%`}
+                        stopColor="white"
+                        stopOpacity={1}
+                    />
+                    <stop
+                        offset="100%"
+                        stopColor="white"
+                        stopOpacity={1}
+                    />
+                </linearGradient>
+            </defs>
+
+            {spans.length > 1 && (
+                <rect
+                    x={toSVG([spans[0].onsetMs, 0])[0]}
+                    y={0}
+                    width={toSVG([lastOffsetMs, 0])[0] - toSVG([spans[0].onsetMs, 0])[0]}
+                    height={height}
+                    fill="url(#timeGradient)"
+                />
+            )}
+
             {spans.map((span, i) => {
-                const insertion = isInsertion(span.id)
                 if (span.type === 'note') {
                     return (
                         <Note
@@ -37,14 +68,25 @@ export const MidiViewer = ({ file, toSVG, height, highlight, isInsertion }: Midi
                             toSVG={toSVG}
                             span={span}
                             highlight={span.id === highlight?.id}
-                            isInsertion={insertion}
+                            onClick={e => onClick(span, e)}
                         />
                     )
-                }
-                else {
+                } else {
                     // TODO
                 }
             })}
+
+            {spans.length > 0 && (
+                <line
+                    x1={toSVG([spans[0].onsetMs, 0])[0]}
+                    y1={0}
+                    x2={toSVG([spans[0].onsetMs, 0])[0]}
+                    y2={height}
+                    stroke="black"
+                    strokeWidth={3}
+                    strokeDasharray={"10,0"}
+                />
+            )}
         </svg>
     )
 }
@@ -53,23 +95,36 @@ interface NoteProps {
     toSVG: (point: Point) => Point
     span: NoteSpan
     highlight: boolean
-    isInsertion: boolean
+    onClick: React.MouseEventHandler
 }
 
-const Note = ({ toSVG, span, highlight, isInsertion }: NoteProps) => {
+const Note = ({ toSVG, span, highlight, onClick }: NoteProps) => {
+    const [hovered, setHovered] = useState(false)
+
+    const { playSingleNote, stop } = usePiano()
+
     const point1 = toSVG([span.onsetMs, span.pitch])
     const point2 = toSVG([span.offsetMs, span.pitch])
 
     return (
         <rect
             className='midiNote'
-            fill={isInsertion ? 'red' : 'gray'}
-            strokeWidth={isInsertion? 2 : highlight ? 7 : 0.5}
-            stroke={isInsertion ? 'black' : 'gray'}
+            fill={hovered ? 'red' : 'gray'}
+            strokeWidth={hovered ? 2 : highlight ? 7 : 0.5}
+            stroke={hovered ? 'black' : 'gray'}
             x={point1[0]}
             y={point1[1]}
             width={point2[0] - point1[0]}
-            height={5}
+            height={7}
+            onClick={onClick}
+            onMouseEnter={() => {
+                playSingleNote(span.pitch, (span.offsetMs - span.onsetMs))
+                setHovered(true)
+            }}
+            onMouseLeave={() => {
+                stop()
+                setHovered(false)
+            }}
         />
     )
 }

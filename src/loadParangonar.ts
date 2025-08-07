@@ -113,22 +113,34 @@ export const getPairs = async (midi: MidiFile, mei: string) => {
             const offset = timemap.find(e => e.off?.includes(entry.note))?.qstamp || entry.qstamp;
             const duration = offset - entry.qstamp;
             const { pitch } = vrvToolkit.getMIDIValuesForElement(entry.note);
-            return parangonarModule.createScoreNote(
-                entry.qstamp,
+            return {
+                onset: entry.qstamp,
                 duration,
                 pitch,
-                entry.note
+                note: entry.note
+            }
+        })
+        .filter((entry, index, arr) => {
+            // Filter out duplicates based on onset and note
+            return arr.findIndex(e => e.onset === entry.onset && e.pitch === entry.pitch) === index;
+        })
+        .map(({ onset, duration, pitch, note}) => {
+            return parangonarModule.createScoreNote(
+                onset,
+                duration,
+                pitch,
+                note
             )
         })
         .forEach((scoreNote) => {
-            console.log('using', scoreNote)
             scoreNotes.push_back(scoreNote)
         })
 
     // Configure alignment
     const config = new parangonarModule.AutomaticNoteMatcherConfig();
-    config.sfuzziness = 4.0;
-    config.pfuzziness = 4.0;
+    config.sfuzziness = 0.1;
+    config.pfuzziness = 0.5;
+    config.alignment_type = "greedy"
 
 
     // Perform alignment

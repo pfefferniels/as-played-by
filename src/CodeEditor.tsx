@@ -3,7 +3,7 @@ import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { xml } from '@codemirror/lang-xml';
 import { Button, Stack } from '@mui/material';
 import { loadVerovio } from './loadVerovio.mts';
-import { Download, Save } from '@mui/icons-material';
+import { OpenInFull, Save } from '@mui/icons-material';
 
 interface CodeEditorProps {
     mei: string;
@@ -17,20 +17,6 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
         useEffect(() => {
             setText(mei)
         }, [mei])
-
-        const handleDownload = () => {
-            if (!text) return;
-
-            const blob = new Blob([text], { type: 'application/xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'as-played-by.mei';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        };
 
         const handleExpand = async () => {
             if (!text) return
@@ -65,6 +51,7 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
                     <Button
                         variant="contained"
                         color="primary"
+                        size='small'
                         onClick={handleSave}
                         disabled={mei === text}
                         startIcon={<Save />}
@@ -72,11 +59,7 @@ export const CodeEditor = React.forwardRef<ReactCodeMirrorRef, CodeEditorProps>(
                         Apply
                     </Button>
 
-                    <Button variant='contained' disabled={text.length === 0} onClick={handleDownload} startIcon={<Download />}>
-                        Download
-                    </Button>
-
-                    <Button variant="contained" onClick={handleExpand}>
+                    <Button variant="outlined" size='small' onClick={handleExpand} startIcon={<OpenInFull />}>
                         Expand Repetitions
                     </Button>
                 </Stack>

@@ -129,7 +129,7 @@ class Aligner {
 
       const startId = tie.getAttribute('data-startid');
       const endId = tie.getAttribute('data-endid');
-      if (!startId || !endId) return
+      if (!startId || !endId) continue
 
       const startUse = this.svg.querySelector(`.note[data-id="${startId.slice(1)}"] use`);
       const endUse = this.svg.querySelector(`.note[data-id="${endId.slice(1)}"] use`);
@@ -156,25 +156,80 @@ class Aligner {
   }
 
   redoBeams() {
-    const beams = document.querySelectorAll('.beam');
+    const beams = this.svg.querySelectorAll('.beam');
     for (const beam of beams) {
       // get the x's of the first and the last stem
-      const stems = beam.querySelectorAll('.note .stem path');
+      const stems = beam.querySelectorAll<SVGPathElement>('.note .stem path');
       if (stems.length <= 1) continue;
 
-      const stem1 = stems[0];
-      const stem2 = stems[stems.length - 1];
+      const polygons = beam.querySelectorAll('polygon');
+      if (polygons.length === 0) continue
 
-      const x1 = stem1.getAttribute('d')?.split(' ')[0].slice(1);
-      const x2 = stem2.getAttribute('d')?.split(' ')[0].slice(1);
-      // console.log('beam from', x1, 'to', x2)
-      const polygon = beam.querySelector('polygon');
-      const points = polygon?.getAttribute('points');
-      if (!points) continue;
+      console.log('run')
+      const widthOfFirstBeam = this.widthOfBeam(polygons[0]);
+      Array
+        .from(polygons)
+        .map(polygon => {
+          const share = this.widthOfBeam(polygon) / widthOfFirstBeam;
+          polygon.setAttribute('data-share', share.toString());
+          return { polygon, share }
+        })
+        .forEach(({ polygon, share }, i) => {
+          const points = polygon.getAttribute('points');
+          if (!points) return;
 
-      const pointArr = points.split(' ').map(p => p.split(','));
-      polygon?.setAttribute('points', `${x1},${pointArr[0][1]} ${x2},${pointArr[1][1]} ${x2},${pointArr[2][1]} ${x1},${pointArr[3][1]}`);
+          const pointArr = points.split(' ').map(p => p.split(','));
+          let startX = parseFloat(pointArr[0][0]);
+          let endX = parseFloat(pointArr[1][0]);
+
+          //console.log('modified?', polygon.getAttribute('data-modified'))
+          const stem1 = this.findClosestStem(startX, Array.from(stems));
+          //console.log('dealing with', i, 'from', stems.length, 'closest to start', startX, 'is', stem1);
+          const stem2 = this.findClosestStem(endX, Array.from(stems));
+          //console.log('closest to end', endX, 'is', stem2);
+
+
+          if (!stem1 || !stem2) {
+            console.log('No stems found for beam', beam);
+            return;
+          }
+
+          startX = +(stem1.getAttribute('d')!.split(' ')[0].slice(1) || 0)
+          endX = +stem2.getAttribute('d')!.split(' ')[0].slice(1);
+
+          polygon.setAttribute('points', `${startX},${pointArr[0][1]} ${endX},${pointArr[1][1]} ${endX},${pointArr[2][1]} ${startX},${pointArr[3][1]}`);
+          polygon.setAttribute('data-modified', 'true');
+        })
     }
+  }
+
+  findClosestStem(x: number, stems: SVGPathElement[]): SVGPathElement | null {
+    let closestStem: SVGPathElement | null = null;
+    let minDistance = Infinity;
+    for (const stem of stems) {
+      const d = stem.getAttribute('d');
+      if (!d) continue;
+
+      // extract the x coordinate from the "M{x},{y}" at the start of the path
+      const xCoord = parseFloat(d.split(' ')[0].slice(1));
+      const distance = Math.abs(x - xCoord);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestStem = stem;
+      }
+    }
+    return closestStem;
+  }
+
+  widthOfBeam(polygon: SVGPolygonElement): number {
+    const points = polygon.getAttribute('points');
+    if (!points) return 0;
+
+    const pointArr = points.split(' ').map(p => p.split(','));
+    const x1 = parseFloat(pointArr[0][0]);
+    const x2 = parseFloat(pointArr[1][0]);
+    return Math.abs(x2 - x1);
   }
 
   redoBarLines() {
@@ -251,6 +306,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
   const [toolkit, setToolkit] = useState<VerovioToolkit>()
 
   useLayoutEffect(() => {
+    console.log('use layout')
     const svg = document.querySelector('#scoreDiv svg') as SVGSVGElement | null;
     if (!svg || !toolkit) return;
 
@@ -268,7 +324,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
 
     aligner.multiplyStems();
 
-    let lastSpan: AnySpan | undefined = undefined
+    //let lastSpan: AnySpan | undefined = undefined
     for (const note of notes) {
       const xmlId = note.getAttribute('xml:id')
       if (!xmlId) continue
@@ -279,21 +335,29 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
         continue
       }
 
-      svgNote.addEventListener('click', () => onClick(svgNote))
+      // enable pointer events and cursor for the SVG note
+      const svgGraphic = svgNote as unknown as SVGGraphicsElement;
+      svgGraphic.style.pointerEvents = 'all';
+      svgGraphic.style.cursor = 'pointer';
+      svgGraphic.addEventListener('click', () => {
+        console.log('click!');
+        onClick(svgNote);
+      });
 
       const span = getSpanForNote(xmlId)
       if (!span) {
         continue
       }
       else if (span === 'deletion') {
-        if (lastSpan) {
-          aligner.shiftNote(svgNote, toSVG([lastSpan.onsetMs, 0])[0])
-        }
+        // if (lastSpan) {
+        //   aligner.shiftNote(svgNote, toSVG([lastSpan.onsetMs, 0])[0])
+        // }
 
-        svgNote.setAttribute('fill', 'red');
+        svgNote.setAttribute('fill', 'darkred');
+        svgNote.setAttribute('fill-opacity', '0.1');
         continue
       }
-      lastSpan = span
+      //lastSpan = span
 
       // set the opacity according to the velocity
       if ('velocity' in span) {
@@ -334,7 +398,8 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       toolkit.setOptions({
         adjustPageHeight: true,
         adjustPageWidth: true,
-        scale: 100,
+        scale: 70,
+        header: 'none',
         breaks: 'none',
         svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n', 'note@corresp'],
         appXPathQuery: ['./rdg[contains(@source, "performance")]'],
@@ -343,6 +408,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, toSVG, highlight, onClick }: A
       toolkit.loadData(mei);
       toolkit.renderToMIDI()
       setSVG(toolkit.renderToSVG(1));
+      console.log('setting svg, should render')
       setToolkit(toolkit)
     })
   }, [mei])
