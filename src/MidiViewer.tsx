@@ -16,19 +16,22 @@ interface MidiViewerProps {
 export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiViewerProps) => {
     const svgRef = useRef<SVGSVGElement>(null)
 
-    const lastOffsetMs = Math.max(...spans.map(span => span.offsetMs))
-    const lastPoint = toSVG([lastOffsetMs || 0, 0])
+    if (spans.length === 0) return null
 
     spans.sort((a, b) => {
-        return a.onsetMs - b.onsetMs;
-    });
+            return a.onsetMs - b.onsetMs;
+        })
+
+    const leftX = toSVG([spans[0].onsetMs, 0])[0]
+    const lastOffsetMs = Math.max(...spans.map(span => span.offsetMs))
+    const lastPoint = toSVG([lastOffsetMs || 0, 0])
 
     return (
         <svg
             width={lastPoint[0] + 100}
             height={height}
             ref={svgRef}
-            style={{ position: 'absolute', top: 0, left: 0 }}
+            style={{ position: 'absolute', top: 0, left: leftX }}
         >
             <defs>
                 <linearGradient id="timeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -52,7 +55,7 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
 
             {spans.length > 1 && (
                 <rect
-                    x={toSVG([spans[0].onsetMs, 0])[0]}
+                    x={0}
                     y={0}
                     width={toSVG([lastOffsetMs, 0])[0] - toSVG([spans[0].onsetMs, 0])[0]}
                     height={height}
@@ -65,7 +68,7 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
                     return (
                         <Note
                             key={`span_${i}`}
-                            toSVG={toSVG}
+                            toSVG={([x, y]) => toSVG([x - spans[0].onsetMs, y])}
                             span={span}
                             highlight={span.id === highlight?.id}
                             onClick={e => onClick(span, e)}
@@ -78,9 +81,9 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
 
             {spans.length > 0 && (
                 <line
-                    x1={toSVG([spans[0].onsetMs, 0])[0]}
+                    x1={2}
                     y1={0}
-                    x2={toSVG([spans[0].onsetMs, 0])[0]}
+                    x2={2}
                     y2={height}
                     stroke="black"
                     strokeWidth={3}

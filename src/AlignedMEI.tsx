@@ -30,6 +30,13 @@ export const AlignedMEI = ({ mei, getSpanForNote, stretchX, onClick }: AlignedME
 
     const aligner = new Aligner(svg, getSpanForNote, stretchX);
     aligner.run(toolkit);
+
+    svg.querySelectorAll('.note').forEach((svgNote) => {
+      svgNote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onClick(svgNote as SVGElement);
+      });
+    })
   }, [divRef, toolkit, getSpanForNote, stretchX, onClick]);
 
   useEffect(() => {
