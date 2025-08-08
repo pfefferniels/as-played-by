@@ -84,7 +84,7 @@ export const CodeEditor = ({ mei, onSave, ref }: CodeEditorProps) => {
                         if (view) {
                             const { from, to } = view.state.selection.main;
                             const bit = view.state.doc.sliceString(from, to);
-                            const wrapped = `<rdg source="original">\n${bit}</rdg>\n`;
+                            const wrapped = `<rdg source="original">\n    ${bit.trim()}\n</rdg>\n`;
                             view.dispatch({
                                 changes: { from, to, insert: wrapped }
                             });
@@ -98,7 +98,7 @@ export const CodeEditor = ({ mei, onSave, ref }: CodeEditorProps) => {
                         if (view) {
                             const { from, to } = view.state.selection.main;
                             const bit = view.state.doc.sliceString(from, to);
-                            const wrapped = `<app>${bit}</app>`;
+                            const wrapped = `<app>${bit.trim()}</app>`;
                             view.dispatch({
                                 changes: { from, to, insert: wrapped }
                             });
@@ -123,7 +123,7 @@ export const CodeEditor = ({ mei, onSave, ref }: CodeEditorProps) => {
             <CreateReading
                 open={createReading}
                 onClose={() => setCreateReading(false)}
-                bit={selectedBit}
+                bit={selectedBit.trim()}
                 onDone={(newMEI) => {
                     if (view) {
                         const { from, to } = view.state.selection.main;

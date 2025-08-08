@@ -29,12 +29,12 @@ export const CreateReading = ({ open, bit, onDone, onClose }: CreateReadingProps
 
     const handleSave = () => {
         onDone(`
-            <rdg source="performance" reason="${readingType}">
-                <supplied resp="${person}" certainty="${certainty}">
-                    <annot>${note}</annot>
-                    ${bit}
-                </supplied>
-            </rdg>
+<rdg source="performance" reason="${readingType}">
+    <supplied resp="${person}" certainty="${certainty}">
+        <annot>${note}</annot>
+        ${bit}
+    </supplied>
+</rdg>
         `);
     };
 
