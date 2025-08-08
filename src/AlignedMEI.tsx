@@ -6,16 +6,17 @@ import { VerovioToolkit } from 'verovio/esm'
 import { AnySpan } from "./MidiSpans";
 import { Aligner } from "./Aligner";
 
-
 interface AlignedMEIProps {
   mei: string
-  getSpanForNote: (id: string) => AnySpan | 'deletion' | undefined
+  duplicateNoteIDs?: string[]
+  getSpanForNote: (id: string) => AnySpan | undefined
   stretchX: number
   highlight?: string
   onClick: (svgNote: SVGElement) => void
+  onHover: (svgNote: SVGElement) => void
 }
 
-export const AlignedMEI = ({ mei, getSpanForNote, stretchX, onClick }: AlignedMEIProps) => {
+export const AlignedMEI = ({ mei, duplicateNoteIDs, getSpanForNote, stretchX, onClick, onHover }: AlignedMEIProps) => {
   // const { playSingleNote } = usePiano()
   const [svg, setSVG] = useState<string>('');
   const [toolkit, setToolkit] = useState<VerovioToolkit>()
@@ -36,8 +37,22 @@ export const AlignedMEI = ({ mei, getSpanForNote, stretchX, onClick }: AlignedME
         e.stopPropagation();
         onClick(svgNote as SVGElement);
       });
+
+      svgNote.addEventListener('mouseover', (e) => {
+        e.stopPropagation();
+        onHover(svgNote as SVGElement);
+      });
     })
-  }, [divRef, toolkit, getSpanForNote, stretchX, onClick]);
+
+    if (duplicateNoteIDs) {
+      for (const duplicate of duplicateNoteIDs) {
+        const svgNote = svg.querySelector<SVGElement>(`.note[data-id="${duplicate}"]`);
+        if (svgNote) {
+          svgNote.style.display = 'none';
+        }
+      }
+    }
+  }, [divRef, toolkit, getSpanForNote, duplicateNoteIDs, stretchX, onClick, onHover]);
 
   useEffect(() => {
     loadVerovio().then((toolkit) => {
@@ -47,7 +62,7 @@ export const AlignedMEI = ({ mei, getSpanForNote, stretchX, onClick }: AlignedME
         scale: 70,
         header: 'none',
         breaks: 'none',
-        svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n', 'note@corresp'],
+        svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n', 'note@corresp', 'note@pname', 'note@oct', 'note@accid', 'note@accid.ges'],
         appXPathQuery: ['./rdg[contains(@source, "performance")]'],
         svgHtml5: true
       });

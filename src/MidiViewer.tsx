@@ -1,7 +1,15 @@
 import { useRef, useState } from "react";
 import { AnySpan, NoteSpan } from "./MidiSpans";
 import { usePiano } from "react-pianosound";
+import { spellMidi } from "./spellPitch";
 // import { usePiano } from "react-pianosound"
+
+/*
+const getYForPitch = (pitch: number, tonic: string, mode: Mode): number => {
+    const spelled = spellPitch(pitch, tonic, mode);
+    const pname = spelled.name.toLowerCase()
+    const oct = spelled.octave;
+}*/
 
 export type Point = [number, number]
 
@@ -9,7 +17,7 @@ interface MidiViewerProps {
     spans: AnySpan[]
     toSVG: (point: Point) => Point
     height: number
-    highlight?: AnySpan
+    highlight?: AnySpan[]
     onClick: (span: AnySpan, e: React.MouseEvent) => void
 }
 
@@ -19,8 +27,8 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
     if (spans.length === 0) return null
 
     spans.sort((a, b) => {
-            return a.onsetMs - b.onsetMs;
-        })
+        return a.onsetMs - b.onsetMs;
+    })
 
     const leftX = toSVG([spans[0].onsetMs, 0])[0]
     const lastOffsetMs = Math.max(...spans.map(span => span.offsetMs))
@@ -70,7 +78,7 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
                             key={`span_${i}`}
                             toSVG={([x, y]) => toSVG([x - spans[0].onsetMs, y])}
                             span={span}
-                            highlight={span.id === highlight?.id}
+                            highlight={highlight?.some(h => h.id === span.id) || false}
                             onClick={e => onClick(span, e)}
                         />
                     )
@@ -109,26 +117,41 @@ const Note = ({ toSVG, span, highlight, onClick }: NoteProps) => {
     const point1 = toSVG([span.onsetMs, span.pitch])
     const point2 = toSVG([span.offsetMs, span.pitch])
 
+    const spelled = spellMidi(span.pitch, 'F#', "major");
+    const pname = spelled.name;
+
     return (
-        <rect
-            className='midiNote'
-            fill={hovered ? 'red' : 'rgba(0, 0, 0, 0.8)'}
-            strokeWidth={hovered ? 2 : highlight ? 7 : 0.5}
-            stroke={hovered ? 'black' : 'gray'}
-            x={point1[0]}
-            y={point1[1]}
-            width={point2[0] - point1[0]}
-            height={7}
-            onClick={onClick}
-            onMouseEnter={() => {
-                playSingleNote(span.pitch, (span.offsetMs - span.onsetMs))
-                setHovered(true)
-            }}
-            onMouseLeave={() => {
-                stop()
-                setHovered(false)
-            }}
-        />
+        <>
+            <rect
+                className='midiNote'
+                fill={(hovered || highlight) ? 'red' : 'rgba(0, 0, 0, 0.8)'}
+                strokeWidth={(hovered || highlight) ? 2 : 0.5}
+                stroke={(hovered || highlight) ? 'black' : 'gray'}
+                x={point1[0]}
+                y={point1[1]}
+                width={point2[0] - point1[0]}
+                height={8}
+                onClick={onClick}
+                onMouseEnter={() => {
+                    playSingleNote(span.pitch, (span.offsetMs - span.onsetMs))
+                    setHovered(true)
+                }}
+                onMouseLeave={() => {
+                    stop()
+                    setHovered(false)
+                }}
+            />
+
+            <text
+                x={point1[0] + 2}
+                y={point1[1] + 6}
+                fontSize={7}
+                fill="white"
+                style={{ userSelect: 'none' }}
+            >
+                {pname}
+            </text>
+        </>
     )
 }
 

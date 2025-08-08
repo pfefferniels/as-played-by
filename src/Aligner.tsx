@@ -26,13 +26,14 @@ const parseTranslate = (transform: string): { x: number, y: number, regex: RegEx
 
 export class Aligner {
   svg: SVGSVGElement
-  getSpanForNote: (noteId: string) => AnySpan | 'deletion' | undefined
+  getSpanForNote: (noteId: string) => AnySpan | undefined
   stretchX: number = 1
 
   constructor(
     svg: SVGSVGElement,
-    getSpanForNote: (noteId: string) => AnySpan | 'deletion' | undefined,
-    stretchX: number) {
+    getSpanForNote: (noteId: string) => AnySpan | undefined,
+    stretchX: number
+  ) {
     this.svg = svg;
     this.getSpanForNote = getSpanForNote;
     this.stretchX = stretchX
@@ -327,33 +328,40 @@ export class Aligner {
     return this.svg.querySelectorAll(`.lineDash[data-related="#${id}"] path`)
   }
 
+  private isEndOfTie(svgNote: SVGElement): boolean {
+    const id = svgNote.getAttribute('data-id')
+    if (!id) return false
+    const tie = this.svg.querySelector(`.tie[data-endid="#${id}"]`)
+    return !!tie
+  }
+
   run(toolkit: VerovioToolkit) {
     this.prepareBeamPolygons();
 
     // displace notes based on matched pairs
     this.multiplyStems();
 
-    let lastSpan: AnySpan | undefined = undefined
+    let lastDiff: number | undefined = undefined
     for (const svgNote of this.svg.querySelectorAll<SVGElement>('.note')) {
       const xmlId = svgNote.getAttribute('data-id')
       if (!xmlId) continue
 
-      // enable pointer events and cursor for the SVG note
-      // svgNote.addEventListener('click', () => {
-      //   onClick(svgNote);
-      // });
-
+      if (this.isEndOfTie(svgNote)) {
+        continue;
+      }
       const span = this.getSpanForNote(xmlId)
-      if (!span) continue
-      else if (span === 'deletion') {
-        if (lastSpan) {
+      if (!span) {
+        // Plan: get original x of the last matched note, 
+        // calculate the distance to its new position,
+        // then shift the unmachted notes by that amount.
+
+        if (lastDiff !== undefined) {
           const origX = this.getOriginalX(svgNote);
           if (!origX) continue
-
-          this.shiftNote(svgNote, lastSpan.onsetMs * this.stretchX + origX)
+          this.shiftNote(svgNote, origX + lastDiff);
         }
         svgNote.setAttribute('fill', 'darkred');
-        svgNote.setAttribute('fill-opacity', '0.1');
+        svgNote.setAttribute('fill-opacity', '0.5');
         continue
       }
 
@@ -364,6 +372,7 @@ export class Aligner {
 
       // set the X position based on the onset time
       const newX = span.onsetMs * this.stretchX
+      lastDiff = newX - (this.getOriginalX(svgNote) || 0)
       this.shiftNote(svgNote, newX)
 
       // Move the second note of a tie and set its
@@ -384,8 +393,6 @@ export class Aligner {
           this.changeOpacity(endNote, span.velocity)
         }
       }
-
-      lastSpan = span;
     }
 
     this.redoTies();
@@ -396,11 +403,16 @@ export class Aligner {
 
   // This must run before any stems are shifted
   prepareBeamPolygons() {
+    if (this.svg.hasAttribute('data-modified')) {
+      console.warn('SVG has already been modified, skipping beam polygon preparation.');
+      return;
+    }
+
     // for each beam, find the first and last note
     // and set the points of the polygon to those notes
     const beams = this.svg.querySelectorAll('.beam');
     for (const beam of beams) {
-      const stems = beam.querySelectorAll<SVGPathElement>('.note .stem path');
+      const stems = beam.querySelectorAll<SVGPathElement>('.stem path');
 
       // One stem, but a beam? That doesn't make sense.
       if (stems.length < 2) continue;

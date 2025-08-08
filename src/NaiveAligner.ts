@@ -1,4 +1,3 @@
-import { Pair } from "./loadParangonar";
 import { loadVerovio } from "./loadVerovio.mts";
 import { AnySpan } from "./MidiSpans";
 
@@ -9,7 +8,7 @@ export type ScoreNote = {
     note: string; // MEI note ID
 }
 
-export const getNotesFromMEI = async (mei: string): Promise<ScoreNote[]> => {
+export const getNotesFromMEI = async (mei: string): Promise<{ notes: ScoreNote[], duplicateNoteIDs: string[] }> => {
     // Create symbolic notes
     const meiDoc = new DOMParser().parseFromString(mei, 'text/xml');
     const vrvToolkit = await loadVerovio();
@@ -21,7 +20,8 @@ export const getNotesFromMEI = async (mei: string): Promise<ScoreNote[]> => {
 
     const timemap = vrvToolkit.renderToTimemap()
 
-    return timemap
+    const duplicateNoteIDs: string[] = []
+    const notes = timemap
         .map(entry => {
             return (entry.on || []).map(note => {
                 return {
@@ -46,35 +46,37 @@ export const getNotesFromMEI = async (mei: string): Promise<ScoreNote[]> => {
             }
         })
         .filter((entry, index, arr) => {
+            console.log('entry', entry)
             // Filter out duplicates based on onset and note
-            return arr.findIndex(e => e.onset === entry.onset && e.pitch === entry.pitch) === index;
+            const withoutDuplicate = arr.findIndex(e => e.onset === entry.onset && e.pitch === entry.pitch) === index
+            if (!withoutDuplicate) {
+                duplicateNoteIDs.push(entry.note);
+            }
+            return withoutDuplicate;
         })
+
+    return { notes, duplicateNoteIDs };
+}
+
+export type Match = {
+    score_id: string;
+    performance_id: string;
 }
 
 export const naiveAligner = (
     scoreNotes: ScoreNote[],
     perfNotes: AnySpan[]
-): Pair[] => {
+): Match[] => {
     const chords = Map.groupBy(scoreNotes, (note) => note.onset);
 
     const tmpPerfNotes = [...perfNotes]
         .filter(span => span.type === 'note')
         .sort((a, b) => a.onsetMs - b.onsetMs);
-    const result: Pair[] = []
+    const result: Match[] = []
     for (const [, chordNotes] of chords) {
         if (tmpPerfNotes.length === 0) {
             console.log('no more perf notes left')
-            return [
-                ...result,
-                ...scoreNotes
-                    .slice(scoreNotes.indexOf(chordNotes[0]))
-                    .map(note => {
-                        return {
-                            label: 'deletion' as const,
-                            score_id: note.note
-                        }
-                    })
-            ]
+            return result
         }
 
         if (chordNotes.length === 1) {
@@ -82,7 +84,6 @@ export const naiveAligner = (
             // only a single note? Should be the next performed note
             if (tmpPerfNotes[0].pitch === chordNotes[0].pitch) {
                 result.push({
-                    label: 'match',
                     score_id: chordNotes[0].note,
                     performance_id: tmpPerfNotes[0].id
                 })
@@ -91,51 +92,21 @@ export const naiveAligner = (
             else {
                 console.log('but no corresp')
                 // not? break off
-                return [
-                    ...result,
-                    ...scoreNotes
-                        .slice(scoreNotes.indexOf(scoreNotes[0]))
-                        .map(note => {
-                            return {
-                                label: 'deletion' as const,
-                                score_id: note.note
-                            }
-                        }),
-                    ...tmpPerfNotes.map(span => {
-                        return {
-                            label: 'insertion' as const,
-                            performance_id: span.id
-                        }
-                    })
-                ]
+                return result
             }
         }
         else {
             console.log(chordNotes.length, 'chord notes')
             for (const chordNote of chordNotes) {
-                const corresp = tmpPerfNotes.find(n => n.pitch === chordNote.pitch)
+                const corresp = tmpPerfNotes
+                    .slice(0, chordNotes.length)
+                    .find(n => n.pitch === chordNote.pitch)
+
                 console.log('searching corresp for', chordNote, 'found', corresp)
                 if (!corresp) {
-                    return [
-                        ...result,
-                        ...scoreNotes
-                            .slice(scoreNotes.indexOf(chordNote))
-                            .map(note => {
-                                return {
-                                    label: 'deletion' as const,
-                                    score_id: note.note
-                                }
-                            }),
-                        ...tmpPerfNotes.map(span => {
-                            return {
-                                label: 'insertion' as const,
-                                performance_id: span.id
-                            }
-                        })
-                    ]
+                    return result
                 }
                 result.push({
-                    label: 'match',
                     score_id: chordNote.note,
                     performance_id: corresp.id
                 })

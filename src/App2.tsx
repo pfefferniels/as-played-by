@@ -1,6 +1,6 @@
 import { MidiFile, read } from "midifile-ts";
 import { useEffect, useRef, useState } from "react";
-import { asSpans } from "./MidiSpans";
+import { AnySpan, asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
 import { Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -8,15 +8,15 @@ import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { CodeEditor } from "./CodeEditor";
 //import { insertRecording, insertWhen } from "./When";
-import { Download, Info } from "@mui/icons-material";
+import { Download, Info, PlayCircle, StopCircle } from "@mui/icons-material";
 import InfoDialog from "./Info";
 //import { insertPedals } from "./insertPedals";
 //import { insertMetadata, parseMetadata } from "./insertMetadata";
-import { Pair } from "./loadParangonar";
-import { getNotesFromMEI, naiveAligner } from "./NaiveAligner";
+import { getNotesFromMEI, Match, naiveAligner } from "./NaiveAligner";
 import { insertMetadata, parseMetadata } from "./insertMetadata";
 import { insertRecording, insertWhen } from "./When";
 import { insertPedals } from "./insertPedals";
+import { usePiano } from "react-pianosound";
 
 /*const isPair = (pair: Partial<Pair>): pair is Pair => {
     if (!('label' in pair)) return false
@@ -30,11 +30,15 @@ export const App = () => {
     const [mei, setMEI] = useState<string>()
     const [midi, setMIDI] = useState<MidiFile>()
     const [midiFileName, setMidiFileName] = useState<string>('')
-    const [pairs, setPairs] = useState<Pair[]>([])
+    const [pairs, setPairs] = useState<Match[]>([])
     const [stretch, setStretch] = useState<number>(0.05);
     const [showHelp, setShowHelp] = useState(false)
+    const [playing, setPlaying] = useState(false)
+    const [duplicateNoteIDs, setDuplicateNoteIDs] = useState<string[]>([])
+    const [selectedSpans, setSelectedSpans] = useState<AnySpan[]>([])
 
     const editorRef = useRef<ReactCodeMirrorRef>(null)
+    const { play, playSingleNote, stop } = usePiano()
 
     useEffect(() => {
         const alertUser = (e: Event) => {
@@ -85,7 +89,9 @@ export const App = () => {
         if (!mei || !midi) return
 
         const perform = async () => {
-            setPairs(naiveAligner(await getNotesFromMEI(mei), asSpans(midi, true)))
+            const notes = await getNotesFromMEI(mei);
+            setPairs(naiveAligner(notes.notes, asSpans(midi, true)))
+            setDuplicateNoteIDs(notes.duplicateNoteIDs)
         }
         perform()
     }, [mei, midi])
@@ -105,8 +111,6 @@ export const App = () => {
         }
 
         for (const pair of pairs) {
-            if (pair.label !== 'match') continue
-
             const span = spans.find(span => span.id === pair.performance_id)
             if (!span) continue
 
@@ -148,9 +152,16 @@ export const App = () => {
 
     const toSVG = ([a, b]: [number, number]) => [a * stretch + 20, (100 - b) * 8] as [number, number]
 
-    const insertedSpans = (midi && pairs.length > 0) ? asSpans(midi, true).filter(span => {
-        return pairs.some(pair => pair.label === 'insertion' && pair.performance_id === span.id)
-    }) : []
+    const unmatchedSpans = (midi && pairs.length > 0)
+        ? asSpans(midi, true)
+            .filter(span => span.type === 'note')
+            .sort((a, b) => a.onsetMs - b.onsetMs)
+            .filter(span => {
+                return pairs.findIndex(pair => pair.performance_id === span.id) == -1
+            })
+        : []
+
+    console.log('unmatched spans', unmatchedSpans)
 
     useEffect(() => {
         if (!midi || !mei) return
@@ -158,7 +169,6 @@ export const App = () => {
         // collect matched spans with their onset times
         const spans = asSpans(midi, true)
         const matched = pairs
-            .filter(p => p.label === 'match' && 'performance_id' in p && 'score_id' in p)
             .map(p => {
                 const span = spans.find(s => s.id === p.performance_id)
                 return span ? { onset: span.onset, scoreId: p.score_id } : null
@@ -204,6 +214,22 @@ export const App = () => {
                             </>
                         )}
 
+                        <IconButton
+                            onClick={() => {
+                                if (!midi) return
+                                if (playing) {
+                                    stop()
+                                    setPlaying(false)
+                                }
+                                else {
+                                    play(midi)
+                                    setPlaying(true)
+                                }
+                            }}
+                        >
+                            {playing ? <StopCircle /> : <PlayCircle />}
+                        </IconButton>
+
                         <IconButton onClick={() => setShowHelp(true)}>
                             <Info />
                         </IconButton>
@@ -232,9 +258,8 @@ export const App = () => {
                 <Box>
                     {pairs.length > 0 && (
                         <span style={{ color: 'gray' }}>
-                            ({pairs.filter(p => p.label === 'match').length} matches,{' '}
-                            {pairs.filter(p => p.label === 'deletion').length} deletions,{' '}
-                            {pairs.filter(p => p.label === 'insertion').length} insertions)
+                            ({pairs.length} matches,{' '}
+                            {unmatchedSpans.length} unmatched elements{' '})
                         </span>
                     )}
                 </Box>
@@ -245,21 +270,17 @@ export const App = () => {
                             {mei && (
                                 <AlignedMEI
                                     mei={mei}
+                                    duplicateNoteIDs={duplicateNoteIDs}
                                     getSpanForNote={(id: string) => {
                                         if (!midi || pairs.length === 0) return
 
                                         const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
                                         if (!pair) return
 
-                                        if (pair.label === 'deletion') {
-                                            return 'deletion'
-                                        }
-
                                         const spans = asSpans(midi)
                                         return spans.find(span => span.id === pair.performance_id)
                                     }}
                                     onClick={svgNote => {
-                                        console.log('onClick')
                                         if (!mei) return
 
                                         const id = svgNote.getAttribute('data-id') || 'no-id'
@@ -268,36 +289,45 @@ export const App = () => {
                                             scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
                                         }
                                     }}
+                                    onHover={(svgNote) => {
+                                        console.log(svgNote)
+                                        const pname = svgNote.getAttribute('data-pname')
+                                        const oct = +(svgNote.getAttribute('data-oct') || '')
+                                        const accid = svgNote.getAttribute('data-accid') || svgNote.getAttribute('data-accid.ges')
+                                        console.log(pname, oct, accid)
+                                        if (!pname || !oct) return
+
+                                        const base: Record<string, number> = {
+                                            c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11
+                                        };
+                                        const accMap: Record<string, number> = {
+                                            "": 0, s: 1, ss: 2, f: -1, ff: -2
+                                        };
+
+                                        const semitone = (base[pname] || 0) + (accMap[accid || ''] || 0);
+                                        const midiPitch = (oct + 1) * 12 + semitone;
+                                        console.log('Playing note:', midiPitch);
+
+                                        playSingleNote(midiPitch);
+                                    }}
                                     stretchX={stretch * 14}
                                 />)}
 
                             <MidiViewer
-                                spans={insertedSpans}
+                                spans={unmatchedSpans}
                                 toSVG={toSVG}
                                 height={700}
                                 onClick={(span) => {
-                                    const view = editorRef.current?.view
-                                    if (!view || span.type !== 'note') return
-
-                                    // get the insertion point (cursor head)
-                                    const { head } = view.state.selection.main
-
-                                    if (!span) return;
-                                    const pitch = span.pitch;
-                                    const chroma = ((pitch % 12) + 12) % 12;
-                                    const [pname, ...accArr] = ["c", "cs", "d", "ds", "e", "f", "fs", "g", "gs", "a", "as", "b"][chroma];
-                                    const accid = accArr.join("");
-                                    const oct = Math.floor(pitch / 12) - 1;
-
-                                    const meiNote = `<note pname="${pname}" oct="${oct}" xml:id="${span.id}" stem.dir="up" accid="${accid}" />\n`;
-
-                                    view.dispatch({
-                                        changes: { from: head, insert: meiNote },
-                                        selection: EditorSelection.single(head + meiNote.length)
+                                    setSelectedSpans(prev => {
+                                        if (prev.find(s => s.id === span.id)) {
+                                            return prev.filter(s => s.id !== span.id);
+                                        }
+                                        else {
+                                            return [...prev, span];
+                                        }
                                     })
-
-                                    view.focus()
                                 }}
+                                highlight={selectedSpans}
                             />
                         </div>
                     </Box>
@@ -318,6 +348,7 @@ export const App = () => {
                                 mei={mei || ''}
                                 onSave={setMEI}
                                 ref={editorRef}
+                                selectedSpans={selectedSpans}
                             />
                         </Box>
                     )}
