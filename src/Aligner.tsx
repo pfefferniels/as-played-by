@@ -346,10 +346,10 @@ export class Aligner {
       const xmlId = svgNote.getAttribute('data-id')
       if (!xmlId) continue
 
-      if (this.isEndOfTie(svgNote)) {
+      const span = this.getSpanForNote(xmlId)
+      if (this.isEndOfTie(svgNote) && span) {
         continue;
       }
-      const span = this.getSpanForNote(xmlId)
       if (!span) {
         // Plan: get original x of the last matched note, 
         // calculate the distance to its new position,

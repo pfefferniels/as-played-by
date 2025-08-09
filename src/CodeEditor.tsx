@@ -9,9 +9,6 @@ import DropdownButton from './DropdownButton';
 import { CreateReading } from './CreateReading';
 import { AnySpan } from './MidiSpans';
 
-
-
-
 interface CodeEditorProps {
     mei: string;
     onSave: (newMEI: string) => void;

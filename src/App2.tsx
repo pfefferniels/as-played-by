@@ -92,6 +92,7 @@ export const App = () => {
             const notes = await getNotesFromMEI(mei);
             setPairs(naiveAligner(notes.notes, asSpans(midi, true)))
             setDuplicateNoteIDs(notes.duplicateNoteIDs)
+            setSelectedSpans([])
         }
         perform()
     }, [mei, midi])
