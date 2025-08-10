@@ -2,29 +2,18 @@ import { MidiFile, read } from "midifile-ts";
 import { useEffect, useRef, useState } from "react";
 import { AnySpan, asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
 import { CodeEditor } from "./CodeEditor";
-//import { insertRecording, insertWhen } from "./When";
-import { Download, Info, PlayCircle, StopCircle } from "@mui/icons-material";
+import { Download, ExpandMore, Info, PlayCircle, StopCircle } from "@mui/icons-material";
 import InfoDialog from "./Info";
-//import { insertPedals } from "./insertPedals";
-//import { insertMetadata, parseMetadata } from "./insertMetadata";
 import { getNotesFromMEI, Match, naiveAligner } from "./NaiveAligner";
 import { insertMetadata, parseMetadata } from "./insertMetadata";
 import { insertRecording, insertWhen } from "./When";
 import { insertPedals } from "./insertPedals";
 import { usePiano } from "react-pianosound";
-
-/*const isPair = (pair: Partial<Pair>): pair is Pair => {
-    if (!('label' in pair)) return false
-    if (pair.label === 'match') return 'performance_id' in pair && 'score_id' in pair
-    else if (pair.label === 'deletion') return 'score_id' in pair
-    else if (pair.label === 'insertion') return 'performance_id' in pair
-    return false
-}*/
 
 export const App = () => {
     const [mei, setMEI] = useState<string>()
@@ -151,7 +140,7 @@ export const App = () => {
         })
     }
 
-    const toSVG = ([a, b]: [number, number]) => [a * stretch + 20, (100 - b) * 8] as [number, number]
+    const toSVG = ([a, b]: [number, number]) => [a * stretch, (100 - b) * 8] as [number, number]
 
     const unmatchedSpans = (midi && pairs.length > 0)
         ? asSpans(midi, true)
@@ -311,12 +300,12 @@ export const App = () => {
 
                                         playSingleNote(midiPitch);
                                     }}
-                                    stretchX={stretch * 14}
+                                    stretchX={stretch * 14.1}
                                 />)}
 
                             <MidiViewer
                                 spans={unmatchedSpans}
-                                toSVG={toSVG}
+                                toSVG={(([x, y]) => toSVG([x, y]))}
                                 height={700}
                                 onClick={(span) => {
                                     setSelectedSpans(prev => {
@@ -334,29 +323,39 @@ export const App = () => {
                     </Box>
 
                     {mei && (
-                        <Box
-                            style={{
+                        <Accordion
+                            defaultExpanded
+                            sx={{
                                 position: 'absolute',
                                 right: '1rem',
+                                top: '2rem',
                                 backgroundColor: 'rgba(255, 255, 255)',
-                                padding: '15px 30px',
                                 borderRadius: '10px',
                                 border: '1px solid rgba(255, 255, 255, 0.2)',
                                 boxShadow: '0 10px 20px 0 rgba(0, 0, 0, 0.3)',
                             }}
                         >
-                            <CodeEditor
-                                mei={mei || ''}
-                                onSave={setMEI}
-                                ref={editorRef}
-                                selectedSpans={selectedSpans}
-                            />
-                        </Box>
+                            <AccordionSummary
+                                expandIcon={<ExpandMore />}
+                                sx={{
+                                    minHeight: 'auto',
+                                }}>
+                                MEI Editor
+                            </AccordionSummary>
+                            <AccordionDetails>
+                                <CodeEditor
+                                    mei={mei || ''}
+                                    onSave={setMEI}
+                                    ref={editorRef}
+                                    selectedSpans={selectedSpans}
+                                />
+                            </AccordionDetails>
+                        </Accordion>
                     )}
                 </Stack>
             </Stack>
 
-            <Box sx={{ position: 'fixed', bottom: 0, width: '90vw', textAlign: 'left', backgroundColor: 'white', padding: '0.5rem', boxShadow: '0 -2px 5px rgba(0,0,0,0.1)' }}>
+            <Box sx={{ position: 'fixed', bottom: 0, width: '90vw', textAlign: 'left', backgroundColor: 'white', padding: '0.5rem' }}>
                 <span>&copy; {new Date().getFullYear()} Niels Pfeffer</span>
             </Box>
 

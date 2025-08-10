@@ -29,6 +29,23 @@ export const AlignedMEI = ({ mei, duplicateNoteIDs, getSpanForNote, stretchX, on
     const svg = divRef.current.querySelector('svg') as SVGSVGElement | null;
     if (!svg || !toolkit || svg.hasAttribute('data-modified')) return;
 
+    if (duplicateNoteIDs) {
+      for (const duplicate of duplicateNoteIDs) {
+        const svgNote = svg.querySelector<SVGElement>(`.note[data-id="${duplicate}"]`);
+        svgNote?.remove()
+
+        const tie = svg.querySelector<SVGElement>(`.tie[data-startid="#${duplicate}"]`);
+        if (tie) {
+          const endid = tie.getAttribute('data-endid');
+          if (endid) {
+            const endNote = svg.querySelector<SVGElement>(`.note[data-id="${endid.slice(1)}"]`);
+            endNote?.remove();
+          }
+          tie.remove();
+        }
+      }
+    }
+
     const aligner = new Aligner(svg, getSpanForNote, stretchX);
     aligner.run(toolkit);
 
@@ -43,15 +60,6 @@ export const AlignedMEI = ({ mei, duplicateNoteIDs, getSpanForNote, stretchX, on
         onHover(svgNote as SVGElement);
       });
     })
-
-    if (duplicateNoteIDs) {
-      for (const duplicate of duplicateNoteIDs) {
-        const svgNote = svg.querySelector<SVGElement>(`.note[data-id="${duplicate}"]`);
-        if (svgNote) {
-          svgNote.style.display = 'none';
-        }
-      }
-    }
   }, [divRef, toolkit, getSpanForNote, duplicateNoteIDs, stretchX, onClick, onHover]);
 
   useEffect(() => {

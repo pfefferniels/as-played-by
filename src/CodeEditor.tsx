@@ -58,7 +58,7 @@ export const CodeEditor = ({ mei, onSave, ref, selectedSpans }: CodeEditorProps)
     }
 
     return (
-        <>
+        <div>
             <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
                 <Button
                     variant="contained"
@@ -150,7 +150,6 @@ export const CodeEditor = ({ mei, onSave, ref, selectedSpans }: CodeEditorProps)
                 ref={ref}
             />
 
-
             <CreateReading
                 open={createReading}
                 onClose={() => setCreateReading(false)}
@@ -166,7 +165,7 @@ export const CodeEditor = ({ mei, onSave, ref, selectedSpans }: CodeEditorProps)
                     setCreateReading(false);
                 }}
             />
-        </>
+        </div>
     )
 }
 

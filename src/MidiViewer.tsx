@@ -73,6 +73,9 @@ export const MidiViewer = ({ spans, toSVG, height, highlight, onClick }: MidiVie
 
             {spans.map((span, i) => {
                 if (span.type === 'note') {
+                    if (span.onsetMs < spans[0].onsetMs) {
+                        console.log('How is that possible??')
+                    }
                     return (
                         <Note
                             key={`span_${i}`}
@@ -117,7 +120,7 @@ const Note = ({ toSVG, span, highlight, onClick }: NoteProps) => {
     const point1 = toSVG([span.onsetMs, span.pitch])
     const point2 = toSVG([span.offsetMs, span.pitch])
 
-    const spelled = spellMidi(span.pitch, 'F#', "major");
+    const spelled = spellMidi(span.pitch, 'F', "major");
     const pname = spelled.name;
 
     return (

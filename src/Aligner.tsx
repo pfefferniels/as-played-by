@@ -346,22 +346,38 @@ export class Aligner {
       const xmlId = svgNote.getAttribute('data-id')
       if (!xmlId) continue
 
-      const span = this.getSpanForNote(xmlId)
-      if (this.isEndOfTie(svgNote) && span) {
-        continue;
+      if (this.isEndOfTie(svgNote)) {
+        console.log('Skipping end of tie note', xmlId);
+        continue
       }
+
+      const span = this.getSpanForNote(xmlId)
       if (!span) {
-        // Plan: get original x of the last matched note, 
+        // Get original x of the last matched note, 
         // calculate the distance to its new position,
         // then shift the unmachted notes by that amount.
 
-        if (lastDiff !== undefined) {
-          const origX = this.getOriginalX(svgNote);
-          if (!origX) continue
-          this.shiftNote(svgNote, origX + lastDiff);
+        if (lastDiff === undefined) {
+          continue
         }
+
+        const origX = this.getOriginalX(svgNote);
+        if (!origX) continue
+        this.shiftNote(svgNote, origX + lastDiff);
+
         svgNote.setAttribute('fill', 'darkred');
         svgNote.setAttribute('fill-opacity', '0.5');
+
+        const endNote = this.tiedNoteOf(svgNote)
+        if (endNote) {
+          // If the note is tied, we also need to shift the end note
+          const origX = this.getOriginalX(endNote);
+          if (!origX) continue
+          this.shiftNote(endNote, origX + lastDiff || 0);
+          endNote.setAttribute('fill', 'darkred');
+          endNote.setAttribute('fill-opacity', '0.5');
+        }
+
         continue
       }
 
@@ -379,15 +395,58 @@ export class Aligner {
       // opacity based on the velocity
       const endNote = this.tiedNoteOf(svgNote)
       if (endNote) {
+        const endId = endNote.getAttribute('data-id')
+        if (!endId) continue
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const times = toolkit.getTimesForElement(xmlId) as any
-        const [num1, denom1] = times.qfracDuration[0]
-        const [num2, denom2] = times.qfracTiedDuration[0]
-        const dur = num1 / denom1
-        const tied = num2 / denom2
-        const share = dur / (dur + tied)
-        const endX = newX + share * (span.offsetMs - span.onsetMs) * this.stretchX
-        this.shiftNote(endNote, endX);
+        const symbolicOnset = (toolkit.getTimesForElement(endId) as any).tstampOn[0]
+
+        let endX: number | undefined = undefined
+        for (const otherNote of this.svg.querySelectorAll('.note')) {
+          const otherId = otherNote.getAttribute('data-id')
+          if (!otherId) continue
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const otherOnset = (toolkit.getTimesForElement(otherId) as any).tstampOn[0]
+          if (otherOnset === symbolicOnset && otherId !== endId) {
+            const newOtherX = this.getSpanForNote(otherId)
+            if (newOtherX !== undefined) {
+              const candidate = newOtherX.onsetMs * this.stretchX
+              if (endX === undefined || candidate < endX) {
+                endX = candidate
+              }
+            }
+            else if (endX === undefined) {
+              // There is a note with the same symbolic onset,
+              // but it has no span (yet). In that case, we 
+              // draw a tie with an unspecified end.
+              endX = newX + 700;
+              endNote.style.display = 'none'
+            }
+          }
+        }
+
+        if (endX === undefined) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const times = toolkit.getTimesForElement(xmlId) as any
+          const [num1, denom1] = times.qfracDuration[0]
+          const [num2, denom2] = times.qfracTiedDuration[0]
+          const dur = num1 / denom1
+          const tied = num2 / denom2
+          const share = dur / (dur + tied)
+          endX = newX + share * (span.offsetMs - span.onsetMs) * this.stretchX
+        }
+
+        if (endX <= newX) {
+          console.log('end x is before start x, how sad. Eliminate any traces of me failing');
+          endNote?.remove();
+          const tie = this.svg.querySelector(`.tie[data-startid="#${xmlId}"]`);
+          tie?.remove()
+          continue
+        }
+        else {
+          this.shiftNote(endNote, endX);
+        }
 
         if ('velocity' in span) {
           this.changeOpacity(endNote, span.velocity)
