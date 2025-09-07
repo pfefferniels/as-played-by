@@ -32,7 +32,14 @@ export const getNotesFromMEI = async (mei: string): Promise<{ notes: ScoreNote[]
         })
         .flat()
         .filter(entry => {
-            return meiDoc.querySelector(`tie[endid="#${entry.note}"]`) === null
+            const possibleTie = meiDoc.querySelector(`tie[endid="#${entry.note}"]`);
+            if (possibleTie) {
+                if (possibleTie.closest('rdg')?.getAttribute('source') === 'original') {
+                    return true;
+                }
+                return false;
+            }
+            return true;
         })
         .map(entry => {
             const offset = timemap.find(e => e.off?.includes(entry.note))?.qstamp || entry.qstamp;
@@ -96,21 +103,24 @@ export const naiveAligner = (
             }
         }
         else {
-            console.log(chordNotes.length, 'chord notes')
+            let alignedChordNotes = 0
             for (const chordNote of chordNotes) {
                 const corresp = tmpPerfNotes
                     .slice(0, chordNotes.length)
                     .find(n => n.pitch === chordNote.pitch)
 
-                console.log('searching corresp for', chordNote, 'found', corresp)
                 if (!corresp) {
-                    return result
+                    // if we are within a chord and something 
+                    // could not be aligned, we consider the 
+                    // whole chord to be unmatched
+                    return result.slice(0, result.length - alignedChordNotes);
                 }
                 result.push({
                     score_id: chordNote.note,
                     performance_id: corresp.id
                 })
                 tmpPerfNotes.splice(tmpPerfNotes.indexOf(corresp), 1)
+                alignedChordNotes += 1;
             }
         }
     }
