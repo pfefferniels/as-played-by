@@ -2,7 +2,7 @@ import { MidiFile, read } from "midifile-ts";
 import { useEffect, useRef, useState } from "react";
 import { AnySpan, asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
-import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Typography } from "@mui/material"
+import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
 import "./App.css"
@@ -195,9 +195,11 @@ export const App = () => {
 
                         {(mei && midi) && (
                             <>
-                                <Button variant="contained" onClick={handleFinalize}>
-                                    Finalize
-                                </Button>
+                                <Tooltip title='Insert <when> elements and <manifestation>s.'>
+                                    <Button variant="contained" onClick={handleFinalize}>
+                                        Finalize
+                                    </Button>
+                                </Tooltip>
                                 <Button variant='contained' size='small' onClick={handleDownload} startIcon={<Download />}>
                                     Download
                                 </Button>

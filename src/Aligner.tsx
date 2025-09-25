@@ -309,16 +309,22 @@ export class Aligner {
     }
   }
 
-  tiedNoteOf(note: SVGElement) {
+  tiedNotesOf(note: SVGElement) {
     const id = note.getAttribute('data-id')
-    const tie = this.svg.querySelector(`.tie[data-startid="#${id}"]`)
-    if (!tie) return null
 
-    // the note is part of a tie. Find the end note
-    const endid = tie.getAttribute('data-endid')
-    if (!endid) return null
+    const result = []
+    let tie = this.svg.querySelector(`.tie[data-startid="#${id}"]`)
+    while (tie) {
+      const endid = tie.getAttribute('data-endid')
+      if (!endid) break
 
-    return this.svg.querySelector(`[data-id="${endid.slice(1)}"]`) as SVGElement | null
+      const endNote = this.svg.querySelector(`.note[data-id="${endid.slice(1)}"]`) as SVGElement | null
+      if (endNote) result.push(endNote)
+
+      tie = this.svg.querySelector(`.tie[data-startid="${endid}"]`)
+    }
+
+    return result
   }
 
   private getLedgerDashesFor(note: SVGElement): NodeListOf<SVGPathElement> {
@@ -368,16 +374,17 @@ export class Aligner {
         svgNote.setAttribute('fill', 'darkred');
         svgNote.setAttribute('fill-opacity', '0.5');
 
-        const endNote = this.tiedNoteOf(svgNote)
-        if (endNote) {
-          // If the note is tied, we also need to shift the end note
-          const origX = this.getOriginalX(endNote);
-          if (!origX) continue
-          this.shiftNote(endNote, origX + lastDiff || 0);
-          endNote.setAttribute('fill', 'darkred');
-          endNote.setAttribute('fill-opacity', '0.5');
+        const endNotes = this.tiedNotesOf(svgNote)
+        for (const endNote of endNotes) {
+          if (endNote) {
+            // If the note is tied, we also need to shift the end note
+            const origX = this.getOriginalX(endNote);
+            if (!origX) continue
+            this.shiftNote(endNote, origX + lastDiff || 0);
+            endNote.setAttribute('fill', 'darkred');
+            endNote.setAttribute('fill-opacity', '0.5');
+          }
         }
-
         continue
       }
 
@@ -393,8 +400,8 @@ export class Aligner {
 
       // Move the second note of a tie and set its
       // opacity based on the velocity
-      const endNote = this.tiedNoteOf(svgNote)
-      if (endNote) {
+      const endNotes = this.tiedNotesOf(svgNote)
+      for (const endNote of endNotes) {
         const endId = endNote.getAttribute('data-id')
         if (!endId) continue
 
