@@ -327,11 +327,15 @@ export class Aligner {
     return result
   }
 
-  private getLedgerDashesFor(note: SVGElement): NodeListOf<SVGPathElement> {
+  private getLedgerDashesFor(note: SVGElement): SVGPathElement[] {
     const id = note.getAttribute('data-id')
-    if (!id) return this.svg.querySelectorAll('.lineDash')
+    if (!id) return Array.from(this.svg.querySelectorAll('.lineDash'))
 
-    return this.svg.querySelectorAll(`.lineDash[data-related="#${id}"] path`)
+    return Array
+      .from(this.svg.querySelectorAll(`.lineDash[data-related]`))
+      .filter(dash => dash.getAttribute('data-related')?.split(' ').includes(`#${id}`))
+      .map(dash => dash.querySelector('path'))
+      .filter(path => !!path)
   }
 
   private isEndOfTie(svgNote: SVGElement): boolean {
