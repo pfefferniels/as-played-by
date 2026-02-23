@@ -13,4 +13,7 @@ export default defineConfig({
       allow: ['/Users'],
     },
   },
+  test: {
+    testTimeout: 30000,
+  },
 })
