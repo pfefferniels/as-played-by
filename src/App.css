@@ -1,9 +1,12 @@
 
-.pgHead {
+.editor-mode .pgHead {
     display: none;
 }
 
-.pedal, .flag, .dots, .rest, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir, .tupletNum, .tupletBracket {
+.editor-mode .pedal, .editor-mode .rest, .editor-mode .fermata, .editor-mode .artic, .editor-mode .slur, .editor-mode .tempo, .editor-mode .tupletNum, .editor-mode .tupletBracket {
     display: none;
 }
 
+.viewer-mode .slur, .viewer-mode .rest, .viewer-mode .pedal {
+    display: none;
+}

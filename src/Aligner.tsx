@@ -98,6 +98,25 @@ export class Aligner {
       }
     }
 
+    // Shift flags (inside .stem, use <use> with transform)
+    const flagUse = note.querySelector('.stem .flag use')
+    if (flagUse) {
+      const flagTransform = flagUse.getAttribute('transform') || ''
+      const flagData = parseTranslate(flagTransform)
+      if (flagData) {
+        const newFlagTransform = flagTransform.replace(flagData.regex, `translate(${flagData.x + shift}, ${flagData.y})`)
+        flagUse.setAttribute('transform', newFlagTransform)
+      }
+    }
+
+    // Shift dots (use <ellipse> with cx attribute)
+    note.querySelectorAll('.dots ellipse').forEach(dot => {
+      const cx = dot.getAttribute('cx')
+      if (cx) {
+        dot.setAttribute('cx', (parseFloat(cx) + shift).toString())
+      }
+    })
+
     // Find and shift ledger lines
     const dashes = this.getLedgerDashesFor(note)
     for (const dash of dashes) {
@@ -321,6 +340,96 @@ export class Aligner {
     }
   }
 
+  private getAnchorX(id: string): number | undefined {
+    const noteId = id.replace(/^#/, '')
+    const note = this.svg.querySelector<SVGElement>(`.note[data-id="${noteId}"]`)
+    if (!note) return undefined
+    return this.getOriginalX(note)
+  }
+
+  redoAnchored() {
+    // Shift dynamics: <use> with translate
+    for (const dynam of this.svg.querySelectorAll<SVGElement>('.dynam[data-startid]')) {
+      const startid = dynam.getAttribute('data-startid')
+      if (!startid) continue
+
+      const noteX = this.getAnchorX(startid)
+      if (noteX === undefined) continue
+
+      const use = dynam.querySelector('use')
+      if (!use) continue
+
+      const transform = use.getAttribute('transform') || ''
+      const data = parseTranslate(transform)
+      if (!data) continue
+
+      const newTransform = transform.replace(data.regex, `translate(${noteX}, ${data.y})`)
+      use.setAttribute('transform', newTransform)
+    }
+
+    // Shift dirs: <text> with x attribute
+    for (const dir of this.svg.querySelectorAll<SVGElement>('.dir[data-startid]')) {
+      const startid = dir.getAttribute('data-startid')
+      if (!startid) continue
+
+      const noteX = this.getAnchorX(startid)
+      if (noteX === undefined) continue
+
+      const text = dir.querySelector('text')
+      if (!text) continue
+
+      text.setAttribute('x', noteX.toString())
+    }
+
+    // Shift hairpins: <polyline> with points
+    for (const hairpin of this.svg.querySelectorAll<SVGElement>('.hairpin[data-startid]')) {
+      const startid = hairpin.getAttribute('data-startid')
+      if (!startid) continue
+
+      const startX = this.getAnchorX(startid)
+      if (startX === undefined) continue
+
+      const endid = hairpin.getAttribute('data-endid')
+      const endX = endid ? this.getAnchorX(endid) : undefined
+
+      const polyline = hairpin.querySelector('polyline')
+      if (!polyline) continue
+
+      const points = polyline.getAttribute('points')
+      if (!points) continue
+
+      // Hairpin points are: "x1,y1 x2,y2 x3,y3" where x1=x3 (open end), x2 (point end)
+      const pointArr = points.trim().split(/\s+/).map(p => p.split(','))
+      if (pointArr.length < 3) continue
+
+      const origOpenX = parseFloat(pointArr[0][0])
+      const origPointX = parseFloat(pointArr[1][0])
+
+      // Determine which end is the start (point) and which is the open end
+      // For crescendo: point is left (startid), open is right (endid)
+      // For decrescendo: open is left (startid), point is right (endid)
+      const pointIsLeft = origPointX < origOpenX
+
+      if (pointIsLeft) {
+        // crescendo: point=start, open=end
+        const newPointX = startX
+        const newOpenX = endX ?? origOpenX + (startX - origPointX)
+        pointArr[0][0] = newOpenX.toString()
+        pointArr[1][0] = newPointX.toString()
+        pointArr[2][0] = newOpenX.toString()
+      } else {
+        // decrescendo: open=start, point=end
+        const newOpenX = startX
+        const newPointX = endX ?? origPointX + (startX - origOpenX)
+        pointArr[0][0] = newPointX.toString()
+        pointArr[1][0] = newOpenX.toString()
+        pointArr[2][0] = newPointX.toString()
+      }
+
+      polyline.setAttribute('points', pointArr.map(p => p.join(',')).join(' '))
+    }
+  }
+
   tiedNotesOf(note: SVGElement) {
     const id = note.getAttribute('data-id')
 
@@ -499,6 +608,7 @@ export class Aligner {
     this.redoTies();
     this.redoBeams();
     this.redoBarLines();
+    this.redoAnchored();
     this.svg.setAttribute('data-modified', 'true');
   }
 

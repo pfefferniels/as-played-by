@@ -70,7 +70,11 @@ export const AlignedMEI = ({ mei, duplicateNoteIDs, getSpanForNote, stretchX, on
         scale: 70,
         header: 'none',
         breaks: 'none',
-        svgAdditionalAttribute: ['tie@startid', 'tie@endid', 'measure@n', 'layer@n', 'note@corresp', 'note@pname', 'note@oct', 'note@accid', 'note@accid.ges'],
+        svgAdditionalAttribute: [
+          'tie@startid', 'tie@endid', 'measure@n', 'layer@n',
+          'note@corresp', 'note@pname', 'note@oct', 'note@accid', 'note@accid.ges',
+          'dynam@startid', 'dir@startid', 'hairpin@startid', 'hairpin@endid',
+        ],
         appXPathQuery: ['./rdg[contains(@source, "performance")]'],
         svgHtml5: true
       });
