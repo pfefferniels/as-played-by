@@ -3,7 +3,7 @@
     display: none;
 }
 
-.pedal, .flag, .dots, .rest, .accid, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir, .tupletNum, .tupletBracket {
+.pedal, .flag, .dots, .rest, .fermata, .artic, .slur, .hairpin, .tempo, .fermata, .dynam, .dir, .tupletNum, .tupletBracket {
     display: none;
 }
 

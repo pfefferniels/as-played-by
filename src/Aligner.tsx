@@ -82,9 +82,21 @@ export class Aligner {
 
     // Shift stems
     const stem = note.querySelector('.stem path')
-    if (!stem || !stem.hasAttribute('d')) return
-    const newD = shiftPath(stem.getAttribute('d')!, shift, 0)
-    stem.setAttribute('d', newD)
+    if (stem && stem.hasAttribute('d')) {
+      const newD = shiftPath(stem.getAttribute('d')!, shift, 0)
+      stem.setAttribute('d', newD)
+    }
+
+    // Shift accidentals
+    const accidUse = note.querySelector('.accid use')
+    if (accidUse) {
+      const accidTransform = accidUse.getAttribute('transform') || ''
+      const accidData = parseTranslate(accidTransform)
+      if (accidData) {
+        const newAccidTransform = accidTransform.replace(accidData.regex, `translate(${accidData.x + shift}, ${accidData.y})`)
+        accidUse.setAttribute('transform', newAccidTransform)
+      }
+    }
 
     // Find and shift ledger lines
     const dashes = this.getLedgerDashesFor(note)
@@ -345,11 +357,30 @@ export class Aligner {
     return !!tie
   }
 
+  private multiplyLedgerLines() {
+    for (const dash of this.svg.querySelectorAll('.lineDash[data-related]')) {
+      const related = dash.getAttribute('data-related')
+      if (!related) continue
+
+      const ids = related.split(' ')
+      if (ids.length <= 1) continue
+
+      // Clone the ledger line for each note, each copy references only one note
+      for (const id of ids) {
+        const clone = dash.cloneNode(true) as SVGElement
+        clone.setAttribute('data-related', id)
+        dash.parentNode!.insertBefore(clone, dash)
+      }
+      dash.remove()
+    }
+  }
+
   run(toolkit: VerovioToolkit) {
     this.prepareBeamPolygons();
 
     // displace notes based on matched pairs
     this.multiplyStems();
+    this.multiplyLedgerLines();
 
     let lastDiff: number | undefined = undefined
     for (const svgNote of this.svg.querySelectorAll<SVGElement>('.note')) {
