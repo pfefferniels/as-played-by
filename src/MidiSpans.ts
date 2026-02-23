@@ -1,37 +1,6 @@
 import { MidiFile, AnyEvent, MIDIControlEvents, NoteOnEvent, NoteOffEvent } from "midifile-ts";
 
-const isNoteOn = (event: AnyEvent) => event.type === 'channel' && event.subtype === 'noteOn'
-const isNoteOff = (event: AnyEvent) => event.type === 'channel' && event.subtype === 'noteOff'
-
-const isPedalOn = (event: AnyEvent) => (
-    event.type === 'channel'
-    && event.subtype === 'controller'
-    && event.controllerType === MIDIControlEvents.SUSTAIN
-    && event.value > 63
-)
-
-const isPedalOff = (event: AnyEvent) => (
-    event.type === 'channel'
-    && event.subtype === 'controller'
-    && event.controllerType === MIDIControlEvents.SUSTAIN
-    && event.value <= 63
-)
-
-const isSoftPedalOn = (event: AnyEvent) => {
-    return event.type === 'channel'
-        && event.subtype === 'controller'
-        && event.controllerType === MIDIControlEvents.SOFT_PEDAL
-        && event.value > 63
-}
-
-const isSoftPedalOff = (event: AnyEvent) => {
-    return event.type === 'channel'
-        && event.subtype === 'controller'
-        && event.controllerType === MIDIControlEvents.SOFT_PEDAL
-        && event.value <= 63
-}
-
-export function midiTickToMilliseconds(ticks: number, microsecondsPerBeat: number, ppq: number): number {
+function midiTickToMilliseconds(ticks: number, microsecondsPerBeat: number, ppq: number): number {
     const beats = ticks / ppq;
     return (beats * microsecondsPerBeat) / 1000;
 }
@@ -59,116 +28,157 @@ export interface SoftSpan extends Span<'soft'> { }
 
 export type AnySpan = NoteSpan | SustainSpan | SoftSpan
 
+const isNoteOn  = (e: AnyEvent): e is NoteOnEvent  => e.type === 'channel' && e.subtype === 'noteOn';
+const isNoteOff = (e: AnyEvent): e is NoteOffEvent => e.type === 'channel' && e.subtype === 'noteOff';
+
+const sustainIsOn = (value: number) => value >= 64; // clearer boundary
+const softIsOn    = (value: number) => value >= 64;
+
+type SustainOpen = Record<number, SustainSpan | undefined>; // by MIDI channel 0..15
+type SoftOpen    = Record<number, SoftSpan | undefined>;
+type NoteOpen    = Record<string, NoteSpan | undefined>;    // key = `${channel}:${pitch}`
+
 export const asSpans = (file: MidiFile, readLinks = false) => {
-    const resultingSpans = [];
+  const resultingSpans: AnySpan[] = [];
 
-    type Tempo = { atTick: number; microsecondsPerBeat: number; };
-    const tempoMap: Tempo[] = [];
-    const currentSpans: AnySpan[] = [];
-    let bufferedMetaText
+  type Tempo = { atTick: number; microsecondsPerBeat: number; };
+  const tempoMap: Tempo[] = [];
+  let bufferedMetaText: string | undefined;
 
-    for (let i = 0; i < file.tracks.length; i++) {
-        const track = file.tracks[i];
-        let currentTime = 0;
-        for (const event of track) {
-            currentTime += event.deltaTime;
+  // per-track iteration is fine, but don't confuse track index with MIDI channel
+  for (let i = 0; i < file.tracks.length; i++) {
+    const track = file.tracks[i];
+    let currentTime = 0;
 
-            if (event.type === 'meta' && event.subtype === 'setTempo') {
-                tempoMap.push({
-                    atTick: currentTime,
-                    microsecondsPerBeat: event.microsecondsPerBeat
-                });
-            }
-            if (readLinks && event.type === 'meta' && event.subtype === 'text') {
-                bufferedMetaText = event.text
-            }
-            else if (isNoteOn(event) || isPedalOn(event) || isSoftPedalOn(event)) {
-                const type = isNoteOn(event) ? 'note' : isPedalOn(event) ? 'sustain' : 'soft'
-                const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);
-                if (!currentTempo) {
-                    console.log('No tempo event found. Skipping');
-                    continue;
-                }
+    // per-track open maps (you could hoist to overall file scope if preferred)
+    const sustainOpen: SustainOpen = {};
+    const softOpen: SoftOpen = {};
+    const noteOpen: NoteOpen = {};
 
-                const onsetMs = midiTickToMilliseconds(currentTime, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat)
-                const link = bufferedMetaText
+    for (const event of track) {
+      currentTime += event.deltaTime;
 
-                if (type === 'note') {
-                    const pitch = (event as NoteOnEvent).noteNumber
-                    currentSpans.push({
-                        type,
-                        id: `${i}-${currentTime}-${pitch}`,
-                        onset: currentTime,
-                        offset: 0,
-                        velocity: (event as NoteOnEvent).velocity,
-                        pitch,
-                        channel: i,
-                        onsetMs,
-                        offsetMs: 0,
-                        link
-                    });
-                }
-                else {
-                    currentSpans.push({
-                        type,
-                        id: `${i}-${currentTime}-${type}`,
-                        onset: currentTime,
-                        offset: 0,
-                        onsetMs,
-                        offsetMs: 0,
-                        link
-                    });
-                }
+      if (event.type === 'meta' && event.subtype === 'setTempo') {
+        tempoMap.push({ atTick: currentTime, microsecondsPerBeat: event.microsecondsPerBeat });
+        continue;
+      }
 
-                bufferedMetaText = undefined
-            }
-            else if (isNoteOff(event) || isPedalOff(event) || isSoftPedalOff(event)) {
-                const type = isNoteOff(event) ? 'note' : isPedalOff(event) ? 'sustain' : 'soft'
+      if (readLinks && event.type === 'meta' && event.subtype === 'text') {
+        bufferedMetaText = event.text;
+        continue;
+      }
 
-                const currentTempo = tempoMap.slice().reverse().find(tempo => tempo.atTick <= currentTime);
-                if (!currentTempo) {
-                    console.log('No tempo event found. Skipping');
-                    continue;
-                }
+      // we need a tempo before we can timestamp anything
+      const currentTempo = tempoMap.slice().reverse().find(t => t.atTick <= currentTime);
+      if (!currentTempo) continue;
 
-                const counterpart =
-                    isNoteOff(event)
-                        ? currentSpans.find(e => e.type === 'note' && e.pitch === (event as NoteOffEvent).noteNumber)
-                        : currentSpans.find(e => e.type === type)
-                if (!counterpart) {
-                    console.log('Found an off event of type', type, 'at', currentTime, 'without a previous on.', 'Event:', event, 'Current spans: ', currentSpans.map(span => span.type).join(' '));
-                    continue;
-                }
-                counterpart.offset = currentTime;
-                counterpart.offsetMs = midiTickToMilliseconds(currentTime, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat)
-                if (bufferedMetaText && counterpart.link) {
-                    counterpart.link += ` ${bufferedMetaText}`
-                }
-                resultingSpans.push(counterpart);
-                currentSpans.splice(currentSpans.indexOf(counterpart), 1);
-            }
+      const onsetMs  = (ticks: number) => midiTickToMilliseconds(ticks, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat);
+      const offsetMs = onsetMs;
+
+      if (event.type !== 'channel') continue; // we only handle channel events below
+
+      const ch = event.channel
+
+      // ========= NOTES =========
+      if (isNoteOn(event)) {
+        const key = `${ch}:${event.noteNumber}`;
+        // if a duplicate note-on arrives without off, close-and-emit or ignore; here we ignore duplicates
+        if (!noteOpen[key]) {
+          noteOpen[key] = {
+            type: 'note',
+            id: `${i}-${currentTime}-note-${ch}-${event.noteNumber}`,
+            onset: currentTime,
+            offset: 0,
+            onsetMs: onsetMs(currentTime),
+            offsetMs: 0,
+            pitch: event.noteNumber,
+            velocity: event.velocity,
+            channel: ch,
+            link: bufferedMetaText
+          };
         }
-    }
+        bufferedMetaText = undefined;
+        continue;
+      }
 
-    const sorted = resultingSpans.sort((a, b) => a.onset - b.onset);
-    return sorted
+      if (isNoteOff(event)) {
+        const key = `${ch}:${event.noteNumber}`;
+        const span = noteOpen[key];
+        if (span) {
+          span.offset = currentTime;
+          span.offsetMs = offsetMs(currentTime);
+          if (bufferedMetaText && span.link) span.link += ` ${bufferedMetaText}`;
+          resultingSpans.push(span);
+          noteOpen[key] = undefined;
+        }
+        bufferedMetaText = undefined;
+        continue;
+      }
+
+      // ========= SUSTAIN (CC64) =========
+      if (event.subtype === 'controller' && event.controllerType === MIDIControlEvents.SUSTAIN) {
+        const on = sustainIsOn(event.value);
+        if (on) {
+          // only start if not already down on this channel
+          if (!sustainOpen[ch]) {
+            sustainOpen[ch] = {
+              type: 'sustain',
+              id: `${i}-${currentTime}-sustain-${ch}`,
+              onset: currentTime,
+              offset: 0,
+              onsetMs: onsetMs(currentTime),
+              offsetMs: 0,
+              link: bufferedMetaText
+            };
+          }
+        } else {
+          // only end if currently down
+          const span = sustainOpen[ch];
+          if (span) {
+            span.offset = currentTime;
+            span.offsetMs = offsetMs(currentTime);
+            if (bufferedMetaText && span.link) span.link += ` ${bufferedMetaText}`;
+            resultingSpans.push(span);
+            sustainOpen[ch] = undefined;
+          }
+        }
+        bufferedMetaText = undefined;
+        continue;
+      }
+
+      // ========= SOFT PEDAL (CC67) =========
+      if (event.subtype === 'controller' && event.controllerType === MIDIControlEvents.SOFT_PEDAL) {
+        const on = softIsOn(event.value);
+        if (on) {
+          if (!softOpen[ch]) {
+            softOpen[ch] = {
+              type: 'soft',
+              id: `${i}-${currentTime}-soft-${ch}`,
+              onset: currentTime,
+              offset: 0,
+              onsetMs: onsetMs(currentTime),
+              offsetMs: 0,
+              link: bufferedMetaText
+            };
+          }
+        } else {
+          const span = softOpen[ch];
+          if (span) {
+            span.offset = currentTime;
+            span.offsetMs = offsetMs(currentTime);
+            if (bufferedMetaText && span.link) span.link += ` ${bufferedMetaText}`;
+            resultingSpans.push(span);
+            softOpen[ch] = undefined;
+          }
+        }
+        bufferedMetaText = undefined;
+        continue;
+      }
+    }
+  }
+
+  return resultingSpans.sort((a, b) => a.onset - b.onset);
 };
 
 
-export const midiSpansForParangonar = (midi: MidiFile) => {
-    const spans = asSpans(midi, true)
-    return spans
-        .filter(span => span.type === 'note')
-        .filter(span => (span.offsetMs - span.onsetMs) > 0)
-        .map(span => {
-            // format: { onset, duration, onset_tick, duration_tick, pitch, velocity, track, channel, id }
 
-            return {
-                onsetSec: span.onsetMs / 1000,
-                durationSec: (span.offsetMs - span.onsetMs) / 1000,
-                pitch: span.pitch,
-                velocity: span.velocity,
-                id: span.id
-            }
-        })
-}

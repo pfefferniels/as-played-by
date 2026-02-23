@@ -11,7 +11,7 @@ const getYForPitch = (pitch: number, tonic: string, mode: Mode): number => {
     const oct = spelled.octave;
 }*/
 
-export type Point = [number, number]
+type Point = [number, number]
 
 interface MidiViewerProps {
     spans: AnySpan[]

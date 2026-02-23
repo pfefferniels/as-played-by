@@ -1,6 +1,6 @@
 import { MidiFile } from "midifile-ts";
 
-export interface RecordingMetadata {
+interface RecordingMetadata {
     applicationName?: string;
     source?: string;
     parameters: string[];

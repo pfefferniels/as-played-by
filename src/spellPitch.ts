@@ -1,6 +1,6 @@
 // https://chatgpt.com/share/68968374-dfb0-8005-8adf-f2bacdb54c7c
 
-export type Mode = "major" | "minor";
+type Mode = "major" | "minor";
 type SpelledNote = { midi: number; name: string; pc: number; octave: number };
 
 const SHARP_ORDER = ["F", "C", "G", "D", "A", "E", "B"];
@@ -112,10 +112,3 @@ export function spellMidi(midi: number, tonic: string, mode: Mode = "major"): Sp
   return { midi, pc, octave, name: `${letter}${accidental}${octave}` };
 }
 
-export function spellMidiList(midis: number[], tonic: string, mode: Mode = "major"): SpelledNote[] {
-  return midis.map(m => spellMidi(m, tonic, mode));
-}
-
-// ---- Example ----
-// console.log(spellMidiList([60,61,62,63,64,65,66,67], "G", "major"));
-// -> C4, C#4, D4, D#4, E4, F#4, F#4, G4  (consistent with G major signature)

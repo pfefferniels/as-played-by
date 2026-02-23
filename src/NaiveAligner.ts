@@ -1,7 +1,7 @@
 import { loadVerovio } from "./loadVerovio.mts";
 import { AnySpan } from "./MidiSpans";
 
-export type ScoreNote = {
+type ScoreNote = {
     onset: number; // in quarter notes
     duration: number; // in quarter notes
     pitch: number; // MIDI pitch

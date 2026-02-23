@@ -1,13 +1,5 @@
 import { AnySpan } from "./MidiSpans";
 
-export const removeAllWhen = (mei: Document) => {
-    mei.querySelectorAll('when').forEach(when => when.remove());
-};
-
-export const removeAllPedals = (mei: Document) => {
-    mei.querySelectorAll('pedal').forEach(pedal => pedal.remove());
-}
-
 export const insertRecording = (newMEI: Document, source?: string) => {
     let recording = source
         ? newMEI.querySelector(`recording[source="${source}"]`)

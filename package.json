@@ -17,18 +17,14 @@
     "@emotion/styled": "^11.13.0",
     "@mui/icons-material": "^6.1.5",
     "@mui/material": "^6.1.4",
-    "@tonejs/piano": "^0.2.1",
     "@types/uuid": "^10.0.0",
     "@uiw/react-codemirror": "^4.23.5",
     "midifile-ts": "^1.5.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-pianosound": "^0.0.0",
-    "tonal": "^6.0.1",
-    "tone": "^14.7.77",
     "uuid": "^10.0.0",
-    "verovio": "^5.5.0",
-    "webmidi": "^2.5.1"
+    "verovio": "^5.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.66",
@@ -41,6 +37,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "gh-pages": "^6.3.0",
+    "knip": "^5.85.0",
     "typescript": "^5.6.2",
     "vite": "^7.0.6"
   }
