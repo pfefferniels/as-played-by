@@ -197,22 +197,22 @@ export class Aligner {
 
       Array
         .from(polygons)
-        .filter(polygon => polygon.hasAttribute('data-left-stem') && polygon.hasAttribute('data-right-stem'))
+        .filter(polygon => polygon.hasAttribute('data-left-note') && polygon.hasAttribute('data-right-note'))
         .forEach((polygon) => {
           const points = polygon.getAttribute('points');
           if (!points) return;
 
           const pointArr = points.split(' ').map(p => p.split(','));
-          const stem1 = this.svg.querySelector<SVGPathElement>(`.stem[data-id="${polygon.getAttribute('data-left-stem')}"]`);
-          const stem2 = this.svg.querySelector<SVGPathElement>(`.stem[data-id="${polygon.getAttribute('data-right-stem')}"]`);
+          const note1 = this.svg.querySelector<SVGElement>(`.note[data-id="${polygon.getAttribute('data-left-note')}"]`);
+          const note2 = this.svg.querySelector<SVGElement>(`.note[data-id="${polygon.getAttribute('data-right-note')}"]`);
 
-          if (!stem1 || !stem2) {
-            console.log('No stems found for beam', beam);
-            return;
-          }
+          // Fall back to beam's first/last stem if a referenced note was removed (e.g. during tie processing)
+          const stem1Path = note1?.querySelector<SVGPathElement>('.stem path') || stems[0];
+          const stem2Path = note2?.querySelector<SVGPathElement>('.stem path') || stems[stems.length - 1];
+          if (!stem1Path || !stem2Path) return;
 
-          const startX = +(stem1.querySelector('path')!.getAttribute('d')!.split(' ')[0].slice(1) || 0)
-          const endX = +stem2.querySelector('path')!.getAttribute('d')!.split(' ')[0].slice(1);
+          const startX = +(stem1Path.getAttribute('d')!.split(' ')[0].slice(1) || 0)
+          const endX = +stem2Path.getAttribute('d')!.split(' ')[0].slice(1);
 
           polygon.setAttribute('points', `${startX},${pointArr[0][1]} ${endX},${pointArr[1][1]} ${endX},${pointArr[2][1]} ${startX},${pointArr[3][1]}`);
         })
@@ -471,6 +471,20 @@ export class Aligner {
     this.svg.setAttribute('data-modified', 'true');
   }
 
+  private stemToNoteId(stem: Element): string | null {
+    // If stem is inside a .note, use that note's data-id
+    const note = stem.closest('.note');
+    if (note) return note.getAttribute('data-id');
+
+    // If stem is inside a .chord, use the first .note's data-id
+    const chord = stem.closest('.chord');
+    if (chord) {
+      const firstNote = chord.querySelector('.note');
+      return firstNote?.getAttribute('data-id') || null;
+    }
+    return null;
+  }
+
   // This must run before any stems are shifted
   prepareBeamPolygons() {
     if (this.svg.hasAttribute('data-modified')) {
@@ -503,8 +517,12 @@ export class Aligner {
         const right = this.findClosestStem(x2, Array.from(stems));
 
         if (left && right) {
-          polygon.setAttribute('data-left-stem', left.getAttribute('data-id') || '');
-          polygon.setAttribute('data-right-stem', right.getAttribute('data-id') || '');
+          const leftNote = this.stemToNoteId(left);
+          const rightNote = this.stemToNoteId(right);
+          if (leftNote && rightNote) {
+            polygon.setAttribute('data-left-note', leftNote);
+            polygon.setAttribute('data-right-note', rightNote);
+          }
         }
         else {
           // if no stem are found, define relative placements instead
