@@ -5,9 +5,10 @@ import { ScoreEvent } from "./ScoreEvents";
 export const insertPedals = (
     pedals: (SustainSpan | SoftSpan)[],
     pairs: [ScoreEvent, NoteSpan][],
-    mei: Document
+    mei: Document,
+    source: string
 ) => {
-    let recording = mei.querySelector('recording');
+    let recording = mei.querySelector('recording[source="' + source + '"]');
     if (!recording) {
         console.log('no performance element found, creating one');
         recording = mei.createElementNS('http://www.music-encoding.org/ns/mei', 'recording');

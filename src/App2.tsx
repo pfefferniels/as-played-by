@@ -110,7 +110,8 @@ export const App = () => {
         insertPedals(
             spans.filter(span => span.type === 'soft' || span.type === 'sustain'),
             [],
-            meiDoc
+            meiDoc,
+            metadata?.source || ''
         )
 
         setMEI(new XMLSerializer().serializeToString(meiDoc))
