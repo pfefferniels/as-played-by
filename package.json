@@ -24,6 +24,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-pianosound": "^0.0.0",
+    "react-router-dom": "^7.13.1",
     "uuid": "^10.0.0",
     "verovio": "^6.0.1"
   },

@@ -5,7 +5,6 @@ import { MidiViewer } from "./MidiViewer";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { AlignedMEI } from "./AlignedMEI";
-import "./App.css"
 import { CodeEditor } from "./CodeEditor";
 import { Download, ExpandMore, Info, PlayCircle, StopCircle } from "@mui/icons-material";
 import InfoDialog from "./Info";
