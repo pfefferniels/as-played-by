@@ -23,8 +23,8 @@ export interface NoteSpan extends Span<'note'> {
     channel: number;
 }
 
-export interface SustainSpan extends Span<'sustain'> { }
-export interface SoftSpan extends Span<'soft'> { }
+export type SustainSpan = Span<'sustain'>
+export type SoftSpan = Span<'soft'>
 
 export type AnySpan = NoteSpan | SustainSpan | SoftSpan
 

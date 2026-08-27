@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // `seps2svg` is an external MusiXTeX-toolchain binary invoked by
+  // src/score-renderer/render.ts, not an npm-provided executable.
+  "ignoreBinaries": ["seps2svg"],
+
+  // Types such as PedalEvent are exported because they appear in the shape of
+  // other exported types, even though they are only referenced in their own file.
+  "ignoreExportsUsedInFile": true,
+
+  // Exports tagged @public deliberately model the full PMX format vocabulary
+  // (see BarLineType / NoteHeadType) even where nothing emits them yet.
+  "tags": ["-@public"],
+
+  "ignore": [
+    // PMX record type (line code 12) modelled ahead of the renderer emitting it.
+    "src/score-renderer/SpecialShape.ts"
+  ]
+}
