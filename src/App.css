@@ -10,3 +10,9 @@
 .viewer-mode .slur, .viewer-mode .rest, .viewer-mode .pedal {
     display: none;
 }
+
+.note-playing *,
+.note-playing {
+    fill: orange !important;
+    stroke: orange !important;
+}
