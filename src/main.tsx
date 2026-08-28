@@ -8,6 +8,8 @@ import './index.css'
 const Viewer = React.lazy(() => import('./Viewer'))
 // eslint-disable-next-line react-refresh/only-export-components
 const EditorApp = React.lazy(() => import('./EditorApp'))
+// eslint-disable-next-line react-refresh/only-export-components
+const MLignApp = React.lazy(() => import('./MLignApp'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -17,6 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Routes>
             <Route path="/" element={<Viewer />} />
             <Route path="/editor" element={<EditorApp />} />
+            <Route path="/mlign" element={<MLignApp />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
