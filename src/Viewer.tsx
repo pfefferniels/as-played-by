@@ -1,237 +1,255 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePiano } from "react-pianosound";
 import type { AnyEvent } from "midifile-ts";
+import {
+    AppBar,
+    Alert,
+    Box,
+    Button,
+    LinearProgress,
+    MenuItem,
+    Select,
+    Slider,
+    Stack,
+    ToggleButton,
+    ToggleButtonGroup,
+    Toolbar,
+    Typography,
+} from "@mui/material";
+import { HorizontalRule, PlayArrow, Stop, ViewDay } from "@mui/icons-material";
 import "./App.css";
-import { AlignedMEI } from "./AlignedMEI";
-import { NoteSpan } from "./MidiSpans";
-import { getNotesFromMEI } from "./NaiveAligner";
-import { parseRecordings } from "./parseRecordings";
+import { PerformedScore } from "./verovio/PerformedScore";
+import { parseRecordings, type RecordingInfo } from "./parseRecordings";
 import { buildMidiFile } from "./buildMidiFile";
+import { useSampleProgress } from "./pianoLoading";
 
-const DEFAULT_STRETCH = 0.05;
-const STRETCH_MULTIPLIER = 14.1;
+/** MEI units given to one second of performed time */
+const DEFAULT_SCALE = 16;
+
+/** The performed seconds one system covers, when the score is broken into systems */
+const SYSTEM_DURATION = 10;
 
 function highlightNote(noteId: string) {
-    // Try SCORE mode (data-mei-id) then Verovio mode (id attribute)
-    const el =
-        document.querySelector(`[data-mei-id="${noteId}"]`) ||
-        document.getElementById(noteId);
+    const el = document.querySelector(`[data-id="${noteId}"]`);
     if (!el) return;
 
     el.classList.add("note-playing");
-    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
 
-    setTimeout(() => {
-        el.classList.remove("note-playing");
-    }, 600);
+    setTimeout(() => el.classList.remove("note-playing"), 600);
 }
 
-function ScoreSVGViewer({ svgContent }: { svgContent: string }) {
-    return (
-        <div
-            style={{ width: "100vw", overflow: "scroll", position: "relative" }}
-            dangerouslySetInnerHTML={{ __html: svgContent }}
-        />
-    );
+function formatDuration(ms: number): string {
+    const seconds = Math.round(ms / 1000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function describe(recording: RecordingInfo): string {
+    const offsets = [...recording.noteSpans.values()].map((span) => span.offsetMs);
+    if (offsets.length === 0) return "no notes";
+
+    return `${offsets.length} notes · ${formatDuration(Math.max(...offsets))}`;
 }
 
 export default function Viewer() {
     const [mei, setMEI] = useState<string>();
-    const [recordings, setRecordings] = useState<
-        Awaited<ReturnType<typeof parseRecordings>>["recordings"]
-    >([]);
-    const [selectedIdx, setSelectedIdx] = useState(0);
+    const [recordings, setRecordings] = useState<RecordingInfo[]>([]);
     const [pitchMap, setPitchMap] = useState<Map<string, number>>(new Map());
+    const [selectedIdx, setSelectedIdx] = useState(0);
+    const [scale, setScale] = useState(DEFAULT_SCALE);
+    const [singleLine, setSingleLine] = useState(false);
+    const [extenders, setExtenders] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [duplicateNoteIDs, setDuplicateNoteIDs] = useState<string[]>([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string>();
 
-    // Per-recording SVGs: index → SVG string
-    const [scoreSVGs, setScoreSVGs] = useState<Map<number, string>>(new Map());
-    // Whether we're in SCORE SVG mode (at least one SVG loaded)
-    const hasScoreSVGs = scoreSVGs.size > 0;
-    const currentSVG = scoreSVGs.get(selectedIdx) ?? null;
-
     const { play, stop, status } = usePiano();
+    const loading = status === "loading";
+    const samples = useSampleProgress(loading);
 
     const selectedRecording = recordings[selectedIdx];
-
-    // Derive spanMap from selected recording for Verovio fallback
-    const spanMap = useMemo<Map<string, NoteSpan>>(
-        () => selectedRecording?.noteSpans ?? new Map(),
-        [selectedRecording]
-    );
 
     const midiFile = useMemo(() => {
         if (!selectedRecording || pitchMap.size === 0) return null;
         return buildMidiFile(selectedRecording, pitchMap);
     }, [selectedRecording, pitchMap]);
 
+    // The recording is selected by its 1-based position, the way verovio counts them
+    const options = useMemo(
+        () => ({
+            performanceRecording: String(selectedIdx + 1),
+            performanceScale: scale,
+            performanceSystemDuration: singleLine ? 0 : SYSTEM_DURATION,
+        }),
+        [selectedIdx, scale, singleLine]
+    );
+
     useEffect(() => {
-        const load = async () => {
-            try {
-                // Always load MEI for recording data
-                const meiResponse = await fetch(
-                    `${import.meta.env.BASE_URL}transcription.mei`
-                );
-                if (!meiResponse.ok) {
-                    setError("Failed to load transcription.mei");
-                    setLoading(false);
-                    return;
-                }
-                const meiText = await meiResponse.text();
+        fetch(`${import.meta.env.BASE_URL}transcription.mei`)
+            .then((response) => {
+                if (!response.ok) throw new Error("Failed to load transcription.mei");
+                return response.text();
+            })
+            .then((meiText) => {
+                const { recordings, pitchMap } = parseRecordings(meiText);
                 setMEI(meiText);
-
-                // Parse recordings
-                const { recordings: recs, pitchMap: pm } =
-                    parseRecordings(meiText);
-                setRecordings(recs);
-                setPitchMap(pm);
-                if (recs.length > 0) setSelectedIdx(0);
-
-                // Try to load per-recording SCORE SVGs
-                // Convention: transcription.score.0.svg, transcription.score.1.svg, ...
-                // Falls back to single transcription.score.svg for backwards compat
-                const svgMap = new Map<number, string>();
-
-                if (recs.length > 1) {
-                    for (let i = 0; i < recs.length; i++) {
-                        const resp = await fetch(
-                            `${import.meta.env.BASE_URL}transcription.score.${i}.svg`
-                        );
-                        if (resp.ok) svgMap.set(i, await resp.text());
-                    }
-                }
-
-                // Fallback: single SVG (no per-recording files)
-                if (svgMap.size === 0) {
-                    const resp = await fetch(
-                        `${import.meta.env.BASE_URL}transcription.score.svg`
-                    );
-                    if (resp.ok) {
-                        const svgText = await resp.text();
-                        for (let i = 0; i < Math.max(1, recs.length); i++) {
-                            svgMap.set(i, svgText);
-                        }
-                    }
-                }
-
-                if (svgMap.size > 0) {
-                    setScoreSVGs(svgMap);
-                } else {
-                    // Fall back to Verovio rendering
-                    const { duplicateNoteIDs: dups } =
-                        await getNotesFromMEI(meiText);
-                    setDuplicateNoteIDs(dups);
-                }
-            } catch (e) {
-                setError(String(e));
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
+                setRecordings(recordings);
+                setPitchMap(pitchMap);
+                setSelectedIdx(0);
+            })
+            .catch((reason: unknown) => setError(String(reason)));
     }, []);
+
+    const handleStop = useCallback(() => {
+        stop();
+        setIsPlaying(false);
+        document
+            .querySelectorAll(".note-playing")
+            .forEach((el) => el.classList.remove("note-playing"));
+    }, [stop]);
 
     const handlePlay = useCallback(() => {
         if (!midiFile) return;
         setIsPlaying(true);
         play(midiFile, (event: AnyEvent) => {
-            if (
-                event.type === "meta" &&
-                event.subtype === "text" &&
-                "text" in event
-            ) {
+            if (event.type === "meta" && event.subtype === "text" && "text" in event) {
                 highlightNote((event as AnyEvent & { text: string }).text);
             }
         });
     }, [midiFile, play]);
 
-    const handleStop = useCallback(() => {
-        stop();
-        setIsPlaying(false);
-        document.querySelectorAll(".note-playing").forEach((el) => {
-            el.classList.remove("note-playing");
-        });
-    }, [stop]);
+    if (error) {
+        return (
+            <Alert severity="error" sx={{ m: 2 }}>
+                {error}
+            </Alert>
+        );
+    }
 
-    const getSpanForNote = useCallback(
-        (id: string) => spanMap.get(id),
-        [spanMap]
-    );
-
-    const noop = useCallback(() => {}, []);
-
-    if (loading) return <p>Loading score&hellip;</p>;
-    if (error) return <p style={{ color: "red" }}>{error}</p>;
+    if (!mei) {
+        return (
+            <Box sx={{ p: 2 }}>
+                <LinearProgress />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Loading score&hellip;
+                </Typography>
+            </Box>
+        );
+    }
 
     return (
-        <div className="viewer-mode" style={{ padding: "1rem" }}>
-            <div
-                style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    marginBottom: "1rem",
-                }}
+        <Box className="viewer-mode" sx={{ minHeight: "100vh", bgcolor: "background.paper" }}>
+            <AppBar
+                position="sticky"
+                color="inherit"
+                elevation={0}
+                sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}
             >
-                {recordings.length > 1 && (
-                    <select
-                        value={selectedIdx}
-                        onChange={(e) => {
-                            handleStop();
-                            setSelectedIdx(Number(e.target.value));
-                        }}
+                <Toolbar sx={{ gap: 1.5, flexWrap: "wrap", py: 1 }}>
+                    <Button
+                        variant="contained"
+                        disableElevation
+                        startIcon={isPlaying ? <Stop /> : <PlayArrow />}
+                        onClick={isPlaying ? handleStop : handlePlay}
+                        disabled={!midiFile || status !== "done"}
+                        sx={{ minWidth: "7rem" }}
                     >
-                        {recordings.map((r, i) => (
-                            <option key={r.source} value={i}>
-                                {r.label}
-                            </option>
-                        ))}
-                    </select>
-                )}
-                <button
-                    onClick={isPlaying ? handleStop : handlePlay}
-                    disabled={!midiFile || status !== "done"}
-                >
-                    {isPlaying ? "Stop" : "Play"}
-                </button>
-                {status === "loading" && <span>Loading piano&hellip;</span>}
-            </div>
+                        {isPlaying ? "Stop" : "Play"}
+                    </Button>
 
-            {hasScoreSVGs && currentSVG ? (
-                <ScoreSVGViewer svgContent={currentSVG} />
-            ) : (
-                <div
-                    style={{
-                        width: "100vw",
-                        overflow: "scroll",
-                        position: "relative",
-                    }}
-                >
-                    {mei && (
-                        <AlignedMEI
-                            mei={mei}
-                            duplicateNoteIDs={duplicateNoteIDs}
-                            getSpanForNote={getSpanForNote}
-                            stretchX={DEFAULT_STRETCH * STRETCH_MULTIPLIER}
-                            onClick={noop}
-                            onHover={noop}
-                        />
+                    {recordings.length > 1 && (
+                        <Select
+                            size="small"
+                            value={selectedIdx}
+                            onChange={(e) => {
+                                handleStop();
+                                setSelectedIdx(Number(e.target.value));
+                            }}
+                        >
+                            {recordings.map((recording, index) => (
+                                <MenuItem key={recording.source} value={index}>
+                                    {recording.label}
+                                </MenuItem>
+                            ))}
+                        </Select>
                     )}
-                </div>
-            )}
 
-            <footer
-                style={{
-                    textAlign: "left",
-                    padding: "0.5rem 0",
-                    marginTop: "1rem",
-                }}
+                    {selectedRecording && (
+                        <Typography variant="body2" color="text.secondary">
+                            {describe(selectedRecording)}
+                        </Typography>
+                    )}
+
+                    {loading && (
+                        <Stack sx={{ minWidth: "12rem" }}>
+                            <Typography variant="caption" color="text.secondary">
+                                Loading piano samples
+                                {samples.samples > 0 && ` · ${samples.samples} loaded`}
+                                {samples.bytes > 0 &&
+                                    ` · ${(samples.bytes / 1_000_000).toFixed(1)} MB`}
+                            </Typography>
+                            <LinearProgress sx={{ mt: 0.5, borderRadius: 1 }} />
+                        </Stack>
+                    )}
+
+                    {status === "error" && (
+                        <Typography variant="body2" color="error">
+                            The piano samples could not be loaded
+                        </Typography>
+                    )}
+
+                    <Box sx={{ flex: 1 }} />
+
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+                        <Typography variant="body2" color="text.secondary">
+                            Scale
+                        </Typography>
+                        <Slider
+                            size="small"
+                            min={4}
+                            max={64}
+                            step={2}
+                            value={scale}
+                            onChange={(_, value) => setScale(value as number)}
+                            valueLabelDisplay="auto"
+                            sx={{ width: "8rem" }}
+                        />
+                    </Stack>
+
+                    <ToggleButtonGroup size="small">
+                        <ToggleButton
+                            value="singleLine"
+                            selected={singleLine}
+                            onChange={() => setSingleLine((on) => !on)}
+                            title="Lay the whole performance out on a single line"
+                        >
+                            <ViewDay fontSize="small" sx={{ mr: 0.5 }} />
+                            One line
+                        </ToggleButton>
+                        <ToggleButton
+                            value="extenders"
+                            selected={extenders}
+                            onChange={() => setExtenders((on) => !on)}
+                            title="Draw a line from each note to where it was released"
+                        >
+                            <HorizontalRule fontSize="small" sx={{ mr: 0.5 }} />
+                            Held notes
+                        </ToggleButton>
+                    </ToggleButtonGroup>
+                </Toolbar>
+            </AppBar>
+
+            <Box sx={{ overflowX: "auto", px: 2, py: 2 }}>
+                <PerformedScore mei={mei} options={options} extenders={extenders} />
+            </Box>
+
+            <Box
+                component="footer"
+                sx={{ px: 2, py: 2, borderTop: 1, borderColor: "divider" }}
             >
-                &copy; {new Date().getFullYear()} Niels Pfeffer
-            </footer>
-        </div>
+                <Typography variant="body2" color="text.secondary">
+                    &copy; {new Date().getFullYear()} Niels Pfeffer
+                </Typography>
+            </Box>
+        </Box>
     );
 }

@@ -1,28 +1,29 @@
 import { MidiFile, read } from "midifile-ts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnySpan, asSpans } from "./MidiSpans";
 import { MidiViewer } from "./MidiViewer";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { AlignedMEI } from "./AlignedMEI";
+import { PerformedScore } from "./verovio/PerformedScore";
+import { pixelsPerSecond } from "./verovio/toolkit";
 import { CodeEditor } from "./CodeEditor";
 import { Download, ExpandMore, Info, PlayCircle, StopCircle } from "@mui/icons-material";
 import InfoDialog from "./Info";
 import { getNotesFromMEI, Match, naiveAligner } from "./NaiveAligner";
-import { insertMetadata, parseMetadata } from "./insertMetadata";
-import { insertRecording, insertWhen } from "./When";
-import { insertPedals } from "./insertPedals";
+import { applyAlignment } from "./applyAlignment";
 import { usePiano } from "react-pianosound";
+
+/** MEI units given to one second of performed time */
+const DEFAULT_SCALE = 16;
 
 export const App = () => {
     const [mei, setMEI] = useState<string>()
     const [midi, setMIDI] = useState<MidiFile>()
     const [midiFileName, setMidiFileName] = useState<string>('')
     const [pairs, setPairs] = useState<Match[]>([])
-    const [stretch, setStretch] = useState<number>(0.05);
+    const [scale, setScale] = useState<number>(DEFAULT_SCALE);
     const [showHelp, setShowHelp] = useState(false)
     const [playing, setPlaying] = useState(false)
-    const [duplicateNoteIDs, setDuplicateNoteIDs] = useState<string[]>([])
     const [selectedSpans, setSelectedSpans] = useState<AnySpan[]>([])
 
     const editorRef = useRef<ReactCodeMirrorRef>(null)
@@ -78,43 +79,21 @@ export const App = () => {
 
         const perform = async () => {
             const notes = await getNotesFromMEI(mei);
-            setPairs(naiveAligner(notes.notes, asSpans(midi, true)))
-            setDuplicateNoteIDs(notes.duplicateNoteIDs)
+            setPairs(naiveAligner(notes, asSpans(midi, true)))
             setSelectedSpans([])
         }
         perform()
     }, [mei, midi])
 
-    const handleFinalize = () => {
-        if (!mei || !midi) return
-
-        const meiDoc = new DOMParser().parseFromString(mei, 'application/xml')
-        const metadata = parseMetadata(midi)
-        insertMetadata(metadata, meiDoc)
-
-        const spans = asSpans(midi, true)
-        const recording = insertRecording(meiDoc, metadata?.source)
-        if (!recording) {
-            console.log('Failed creating recording')
-            return
-        }
-
-        for (const pair of pairs) {
-            const span = spans.find(span => span.id === pair.performance_id)
-            if (!span) continue
-
-            insertWhen(meiDoc, recording, span, pair.score_id)
-        }
-
-        insertPedals(
-            spans.filter(span => span.type === 'soft' || span.type === 'sustain'),
-            [],
-            meiDoc,
-            metadata?.source || ''
-        )
-
-        setMEI(new XMLSerializer().serializeToString(meiDoc))
-    };
+    /**
+     * The score is laid out from the <when> elements of the MEI, so the current
+     * matching is written into it before rendering - which means what is shown
+     * while aligning is exactly the document that "Finalize" keeps.
+     */
+    const alignedMEI = useMemo(() => {
+        if (!mei || !midi) return mei
+        return applyAlignment(mei, midi, pairs)
+    }, [mei, midi, pairs])
 
     const handleDownload = () => {
         if (!mei) return
@@ -140,7 +119,9 @@ export const App = () => {
         })
     }
 
-    const toSVG = ([a, b]: [number, number]) => [a * stretch, (100 - b) * 8] as [number, number]
+    // The piano roll of what could not be matched follows the axis of the score above it
+    const toSVG = ([a, b]: [number, number]) =>
+        [(a / 1000) * pixelsPerSecond({ performanceScale: scale }), (100 - b) * 8] as [number, number]
 
     const unmatchedSpans = (midi && pairs.length > 0)
         ? asSpans(midi, true)
@@ -150,8 +131,6 @@ export const App = () => {
                 return pairs.findIndex(pair => pair.performance_id === span.id) == -1
             })
         : []
-
-    console.log('unmatched spans', unmatchedSpans)
 
     useEffect(() => {
         if (!midi || !mei) return
@@ -195,8 +174,8 @@ export const App = () => {
 
                         {(mei && midi) && (
                             <>
-                                <Tooltip title='Insert <when> elements and <manifestation>s.'>
-                                    <Button variant="contained" onClick={handleFinalize}>
+                                <Tooltip title='Keep the alignment shown: insert <when> elements and <manifestation>s.'>
+                                    <Button variant="contained" onClick={() => alignedMEI && setMEI(alignedMEI)}>
                                         Finalize
                                     </Button>
                                 </Tooltip>
@@ -234,11 +213,11 @@ export const App = () => {
                                 <FormControl sx={{ alignSelf: 'center' }}>
                                     <Slider
                                         sx={{ width: '5rem' }}
-                                        min={0.01}
-                                        max={0.2}
-                                        step={0.005}
-                                        value={stretch}
-                                        onChange={(_, value) => setStretch(value as number)}
+                                        min={4}
+                                        max={64}
+                                        step={2}
+                                        value={scale}
+                                        onChange={(_, value) => setScale(value as number)}
                                         valueLabelDisplay="auto"
                                     />
                                 </FormControl>
@@ -259,50 +238,15 @@ export const App = () => {
                 <Stack spacing={1} direction='row'>
                     <Box>
                         <div style={{ width: '100vw', overflow: 'scroll', position: 'relative' }}>
-                            {mei && (
-                                <AlignedMEI
-                                    mei={mei}
-                                    duplicateNoteIDs={duplicateNoteIDs}
-                                    getSpanForNote={(id: string) => {
-                                        if (!midi || pairs.length === 0) return
-
-                                        const pair = pairs.find(pair => ('score_id' in pair) && pair.score_id === id)
-                                        if (!pair) return
-
-                                        const spans = asSpans(midi)
-                                        return spans.find(span => span.id === pair.performance_id)
+                            {alignedMEI && (
+                                <PerformedScore
+                                    mei={alignedMEI}
+                                    options={{ performanceScale: scale }}
+                                    onNoteClick={note => {
+                                        if (!mei || !mei.includes(note.id)) return
+                                        scrollToRange(mei.indexOf(note.id), mei.indexOf(note.id) + note.id.length)
                                     }}
-                                    onClick={svgNote => {
-                                        if (!mei) return
-
-                                        const id = svgNote.getAttribute('data-id') || 'no-id'
-                                        console.log('id', id)
-                                        if (mei.includes(id)) {
-                                            scrollToRange(mei.indexOf(id), mei.indexOf(id) + id.length)
-                                        }
-                                    }}
-                                    onHover={(svgNote) => {
-                                        console.log(svgNote)
-                                        const pname = svgNote.getAttribute('data-pname')
-                                        const oct = +(svgNote.getAttribute('data-oct') || '')
-                                        const accid = svgNote.getAttribute('data-accid') || svgNote.getAttribute('data-accid.ges')
-                                        console.log(pname, oct, accid)
-                                        if (!pname || !oct) return
-
-                                        const base: Record<string, number> = {
-                                            c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11
-                                        };
-                                        const accMap: Record<string, number> = {
-                                            "": 0, s: 1, ss: 2, f: -1, ff: -2
-                                        };
-
-                                        const semitone = (base[pname] || 0) + (accMap[accid || ''] || 0);
-                                        const midiPitch = (oct + 1) * 12 + semitone;
-                                        console.log('Playing note:', midiPitch);
-
-                                        playSingleNote(midiPitch);
-                                    }}
-                                    stretchX={stretch * 14.1}
+                                    onNoteHover={note => note.pitch && playSingleNote(note.pitch)}
                                 />)}
 
                             <MidiViewer

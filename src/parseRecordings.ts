@@ -1,4 +1,5 @@
 import { NoteSpan } from "./MidiSpans";
+import { midiPitch } from "./pitch";
 
 export interface PedalEvent {
     type: "sustain" | "soft";
@@ -13,39 +14,15 @@ export interface RecordingInfo {
     pedalEvents: PedalEvent[];
 }
 
-const PITCH_BASE: Record<string, number> = {
-    c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11,
-};
+/** The accidental of a note, whether written on it or on a child <accid> */
+function accidentalOf(noteEl: Element, ns: string): string | null {
+    const accid = noteEl.getAttribute("accid");
+    if (accid) return accid;
 
-function getAccidentalOffset(noteEl: Element, ns: string): number {
-    let accid = noteEl.getAttribute("accid");
-
-    if (!accid) {
-        const accidEl = noteEl.getElementsByTagNameNS(ns, "accid")[0];
-        if (accidEl) {
-            accid =
-                accidEl.getAttribute("accid.ges") ||
-                accidEl.getAttribute("accid");
-        }
-    }
-
-    if (!accid) return 0;
-
-    switch (accid) {
-        case "f":
-            return -1;
-        case "s":
-            return 1;
-        case "ff":
-            return -2;
-        case "x":
-        case "ss":
-            return 2;
-        case "n":
-            return 0;
-        default:
-            return 0;
-    }
+    const accidEl = noteEl.getElementsByTagNameNS(ns, "accid")[0];
+    return accidEl
+        ? accidEl.getAttribute("accid.ges") ?? accidEl.getAttribute("accid")
+        : null;
 }
 
 export function parseRecordings(mei: string): {
@@ -59,16 +36,14 @@ export function parseRecordings(mei: string): {
     const pitchMap = new Map<string, number>();
     for (const noteEl of doc.getElementsByTagNameNS(ns, "note")) {
         const id = noteEl.getAttribute("xml:id");
-        const pname = noteEl.getAttribute("pname");
-        const octAttr = noteEl.getAttribute("oct");
-        if (!id || !pname || !octAttr) continue;
+        if (!id) continue;
 
-        const oct = parseInt(octAttr, 10);
-        const base = PITCH_BASE[pname];
-        if (base === undefined) continue;
-
-        const accidOffset = getAccidentalOffset(noteEl, ns);
-        pitchMap.set(id, (oct + 1) * 12 + base + accidOffset);
+        const pitch = midiPitch(
+            noteEl.getAttribute("pname"),
+            noteEl.getAttribute("oct"),
+            accidentalOf(noteEl, ns)
+        );
+        if (pitch !== undefined) pitchMap.set(id, pitch);
     }
 
     // Parse recordings

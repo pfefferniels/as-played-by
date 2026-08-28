@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import CodeMirror, { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { xml } from '@codemirror/lang-xml';
 import { Button, Divider, Stack } from '@mui/material';
-import { loadVerovio } from './loadVerovio.mts';
+import { loadVerovio } from './verovio/toolkit';
 import { OpenInFull, Save } from '@mui/icons-material';
 import { MenuItem } from '@mui/material';
 import DropdownButton from './DropdownButton';

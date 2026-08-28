@@ -1,16 +1,35 @@
 # As Played By
+
 *As played by* is an MEI customization aimed at providing
 a standardized way to align a score with a performance purely
 within MEI. It also includes a tool to generate these MEI files.
 
-## How to run?
-First, start the Parangonar server:
+## Rendering
+
+A performance is rendered by verovio itself: the `<performance>` element of the
+MEI is read as a set of `<recording>`s, and the score is laid out along the time
+one of them was played in, rather than along the notated durations. Notes stand
+where they were struck, the ink density of a notehead is the velocity it was
+played with, barlines are drawn dashed because they no longer sit at a fixed
+place, and a ruler of the performed time runs below every system.
+
+That is not part of verovio upstream. The build carrying it is committed under
+[`vendor/verovio`](vendor/verovio/README.md) and used as the `verovio` package,
+so nothing else is needed to run or build this project. After changing the fork:
+
 ```
-  cd parangonar
-  python3 server.py
+   npm run verovio:build
 ```
 
-Then, run the frontend with:
+Everything the renderer offers is a verovio option (`performanceAlignment`,
+`performanceScale`, `performanceRecording`, ...); `src/verovio/toolkit.ts` holds
+the defaults and `<PerformedScore>` is the one component that draws a score.
+
+## How to run?
+
 ```
    npm run dev
 ```
+
+`/` shows the transcription in `public/`, `/editor` aligns an MEI against a MIDI
+recording and writes the `<when>` elements of the alignment back into it.

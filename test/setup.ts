@@ -1,17 +1,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import createVerovioModule from 'verovio/wasm'
-import { VerovioToolkit } from 'verovio/esm'
 import { Resvg } from '@resvg/resvg-js'
-
-let cachedToolkit: VerovioToolkit | null = null
-
-export async function getToolkit(): Promise<VerovioToolkit> {
-  if (cachedToolkit) return cachedToolkit
-  const module = await createVerovioModule()
-  cachedToolkit = new VerovioToolkit(module)
-  return cachedToolkit
-}
 
 export function loadFixture(name: string): string {
   return readFileSync(join(__dirname, name), 'utf-8')
@@ -20,9 +9,9 @@ export function loadFixture(name: string): string {
 export function renderToPng(svgString: string): Buffer {
   const resvg = new Resvg(svgString, {
     fitTo: { mode: 'width', value: 1200 },
+    background: 'white',
   })
-  const pngData = resvg.render()
-  return Buffer.from(pngData.asPng())
+  return Buffer.from(resvg.render().asPng())
 }
 
 export function pixelDiff(png1: Buffer, png2: Buffer): number {

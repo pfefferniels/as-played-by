@@ -1,0 +1,7 @@
+{
+    "branch": "aligned-mei",
+    "commit": "7e8d5cea3ebcc6a3b929e3b02a17b74c33ebb3cf",
+    "describes": "fix: draw a note tied over with the velocity it was struck with",
+    "builtOn": "2026-08-27T21:16:35Z",
+    "emscripten": "6.0.0"
+}

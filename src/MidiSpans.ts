@@ -1,8 +1,50 @@
 import { MidiFile, AnyEvent, MIDIControlEvents, NoteOnEvent, NoteOffEvent } from "midifile-ts";
 
-function midiTickToMilliseconds(ticks: number, microsecondsPerBeat: number, ppq: number): number {
-    const beats = ticks / ppq;
-    return (beats * microsecondsPerBeat) / 1000;
+/** What MIDI means by a beat when a file never says otherwise: 120 bpm */
+const DEFAULT_TEMPO = 500000;
+
+type Tempo = { atTick: number; microsecondsPerBeat: number };
+
+/** Every setTempo of the file, in absolute ticks - they live in their own track */
+function readTempoMap(file: MidiFile): Tempo[] {
+    const tempos: Tempo[] = [];
+
+    for (const track of file.tracks) {
+        let atTick = 0;
+        for (const event of track) {
+            atTick += event.deltaTime;
+            if (event.type === "meta" && event.subtype === "setTempo") {
+                tempos.push({ atTick, microsecondsPerBeat: event.microsecondsPerBeat });
+            }
+        }
+    }
+
+    return tempos.sort((a, b) => a.atTick - b.atTick);
+}
+
+/**
+ * The time a tick falls at, integrated over the tempo map.
+ *
+ * A tempo change only affects what comes after it, so the elapsed time is the sum
+ * of each stretch at the tempo in force over that stretch. Scaling the whole tick
+ * count by the tempo in force at the end instead would rewrite the history of the
+ * performance every time the tempo moves - on a Welte roll, which accelerates
+ * throughout, by several seconds.
+ */
+function midiTickToMilliseconds(ticks: number, tempos: Tempo[], ppq: number): number {
+    let milliseconds = 0;
+    let from = 0;
+    let microsecondsPerBeat = tempos[0]?.microsecondsPerBeat ?? DEFAULT_TEMPO;
+
+    for (const tempo of tempos) {
+        if (tempo.atTick >= ticks) break;
+
+        milliseconds += ((tempo.atTick - from) / ppq) * microsecondsPerBeat / 1000;
+        from = tempo.atTick;
+        microsecondsPerBeat = tempo.microsecondsPerBeat;
+    }
+
+    return milliseconds + ((ticks - from) / ppq) * microsecondsPerBeat / 1000;
 }
 
 interface Span<T extends string> {
@@ -41,8 +83,9 @@ type NoteOpen    = Record<string, NoteSpan | undefined>;    // key = `${channel}
 export const asSpans = (file: MidiFile, readLinks = false) => {
   const resultingSpans: AnySpan[] = [];
 
-  type Tempo = { atTick: number; microsecondsPerBeat: number; };
-  const tempoMap: Tempo[] = [];
+  // Read in full before anything is timed: the tempo map is usually a track of
+  // its own, and the notes in later tracks are timed against all of it
+  const tempoMap = readTempoMap(file);
   let bufferedMetaText: string | undefined;
 
   // per-track iteration is fine, but don't confuse track index with MIDI channel
@@ -58,21 +101,14 @@ export const asSpans = (file: MidiFile, readLinks = false) => {
     for (const event of track) {
       currentTime += event.deltaTime;
 
-      if (event.type === 'meta' && event.subtype === 'setTempo') {
-        tempoMap.push({ atTick: currentTime, microsecondsPerBeat: event.microsecondsPerBeat });
-        continue;
-      }
+      if (event.type === 'meta' && event.subtype === 'setTempo') continue;
 
       if (readLinks && event.type === 'meta' && event.subtype === 'text') {
         bufferedMetaText = event.text;
         continue;
       }
 
-      // we need a tempo before we can timestamp anything
-      const currentTempo = tempoMap.slice().reverse().find(t => t.atTick <= currentTime);
-      if (!currentTempo) continue;
-
-      const onsetMs  = (ticks: number) => midiTickToMilliseconds(ticks, currentTempo.microsecondsPerBeat, file.header.ticksPerBeat);
+      const onsetMs  = (ticks: number) => midiTickToMilliseconds(ticks, tempoMap, file.header.ticksPerBeat);
       const offsetMs = onsetMs;
 
       if (event.type !== 'channel') continue; // we only handle channel events below
