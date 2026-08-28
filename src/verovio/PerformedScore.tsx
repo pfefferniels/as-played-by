@@ -17,7 +17,6 @@ interface PerformedScoreProps {
     extraNotes?: readonly ExtraNote[];
     /** The key the extra notes are spelled in */
     tonic?: string;
-    onExtraNoteClick?: (divergenceId: string) => void;
     className?: string;
 }
 
@@ -34,7 +33,6 @@ export const PerformedScore = ({
     extenders,
     extraNotes,
     tonic,
-    onExtraNoteClick,
     className,
 }: PerformedScoreProps) => {
     const [pages, setPages] = useState<string[]>([]);
@@ -116,19 +114,7 @@ export const PerformedScore = ({
             // Sized to the music rather than to the viewport, so that a score wider
             // than the window is scrolled to rather than cut off
             style={{ width: "max-content", opacity: rendering ? 0.5 : 1 }}
-            onClick={(event) => {
-                // An extra note is not a .note, so it is caught before the
-                // handler that reads one
-                const extra = (event.target as Element).closest?.(
-                    "[data-divergence]"
-                );
-                const id = extra?.getAttribute("data-divergence");
-                if (id && onExtraNoteClick) {
-                    onExtraNoteClick(id);
-                    return;
-                }
-                noteHandler(onNoteClick)?.(event);
-            }}
+            onClick={noteHandler(onNoteClick)}
             onMouseOver={noteHandler(onNoteHover)}
         >
             {pages.map((page, index) => (

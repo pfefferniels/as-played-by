@@ -8,9 +8,11 @@ import {
     Chip,
     GlobalStyles,
     LinearProgress,
+    MenuItem,
     Paper,
     Slider,
     Stack,
+    TextField,
     Typography,
 } from "@mui/material";
 import { Download } from "@mui/icons-material";
@@ -24,11 +26,14 @@ import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
 import { divergencesOf } from "../alignment/divergences";
 import { ornamentSignsOf } from "../mei/ornamentSigns";
 import { addOrnamentSign, addPlayedNotes, markUnplayed } from "../mei/editScore";
+import { DivergencePopover } from "./DivergencePopover";
 import {
-    DivergencePanel,
+    CERTAINTIES,
+    changesNotation,
+    defaultAction,
     type Attribution,
     type Resolution,
-} from "./DivergencePanel";
+} from "./divergenceReadings";
 import {
     MismatchedPairError,
     alignScoreToPerformance,
@@ -183,7 +188,9 @@ export default function MLignApp() {
         resp: "",
         certainty: "medium",
     });
+    /** The divergence the reader has opened, and the notehead they opened it on */
     const [selected, setSelected] = useState<string>();
+    const [anchorEl, setAnchorEl] = useState<Element>();
 
     const scoreRef = useRef<HTMLDivElement>(null);
 
@@ -280,6 +287,7 @@ export default function MLignApp() {
         setScoreNotes([]);
         setResolutions(new Map());
         setSelected(undefined);
+        setAnchorEl(undefined);
     };
 
     /**
@@ -505,6 +513,15 @@ export default function MLignApp() {
                 .map((match) => match.scoreId),
         ]);
 
+        // Which divergence each unplayed note belongs to, so that clicking one
+        // asks about it. The crosses carry this already; a grey notehead is a
+        // note verovio drew, so it has to be told here.
+        const divergenceOfNote = new Map<string, string>();
+        for (const divergence of divergences) {
+            if (divergence.kind !== "missing") continue;
+            for (const id of divergence.scoreIds) divergenceOfNote.set(id, divergence.id);
+        }
+
         const chosen = divergences.find((divergence) => divergence.id === selected);
 
         const paint = () => {
@@ -518,10 +535,20 @@ export default function MLignApp() {
                     `[data-id="${typeof CSS?.escape === "function" ? CSS.escape(id) : id}"]`
                 );
             for (const id of matched) find(id)?.classList.add("mlign-matched");
-            for (const id of unplayed) find(id)?.classList.add("mlign-unplayed");
+            for (const id of unplayed) {
+                const element = find(id);
+                if (!element) continue;
 
-            // The divergence picked out in the list, so that choosing a row says
-            // where in the music it is
+                element.classList.add("mlign-unplayed");
+                const divergenceId = divergenceOfNote.get(id);
+                if (divergenceId) {
+                    element.setAttribute("data-divergence", divergenceId);
+                    (element as SVGElement).style.cursor = "pointer";
+                }
+            }
+
+            // What the reader currently has open, so the popover and the music
+            // agree about which notes are being talked about
             if (chosen) {
                 const ids =
                     chosen.kind === "added"
@@ -573,6 +600,60 @@ export default function MLignApp() {
                 : []
         );
     }, [divergences, spans, resolutions]);
+
+    /**
+     * Open the question at the note it is about.
+     *
+     * Every divergence is somewhere in this score already - a cross where an
+     * extra note was played, a grey notehead where a written one was not - so
+     * the click that asks about one is the click on it.
+     */
+    const handleScoreClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        const element = (event.target as Element).closest?.("[data-divergence]");
+        const id = element?.getAttribute("data-divergence");
+
+        // The popover lets clicks through to the music beneath it, so a click on
+        // ordinary notation is what closes it
+        if (!id || !element) {
+            setSelected(undefined);
+            setAnchorEl(undefined);
+            return;
+        }
+
+        setSelected(id);
+        setAnchorEl(element);
+    };
+
+    /** Those the reader has not settled yet, in the order they sound. */
+    const undecided = useMemo(
+        () => divergences.filter((divergence) => !resolutions.has(divergence.id)),
+        [divergences, resolutions]
+    );
+
+    /**
+     * Move to the next one that has not been settled, and scroll it into view.
+     *
+     * A divergence whose notes the engraving never draws - a repeat shown once,
+     * a note verovio placed nowhere - is skipped rather than opened on nothing.
+     */
+    const goToNext = () => {
+        const root = scoreRef.current;
+        if (!root) return;
+
+        const after = undecided.filter((divergence) => divergence.id !== selected);
+        for (const divergence of after) {
+            const element = root.querySelector(`[data-divergence="${divergence.id}"]`);
+            if (!element) continue;
+
+            element.scrollIntoView({ block: "center", inline: "center" });
+            setSelected(divergence.id);
+            setAnchorEl(element);
+            return;
+        }
+
+        setSelected(undefined);
+        setAnchorEl(undefined);
+    };
 
     /**
      * Carry out the decisions that change the notation.
@@ -642,6 +723,11 @@ export default function MLignApp() {
         link.click();
         URL.revokeObjectURL(url);
     };
+
+    /** Decisions that would change the notation, which is what Apply carries out */
+    const pendingEdits = divergences.filter((divergence) =>
+        changesNotation(resolutions.get(divergence.id)?.action ?? defaultAction(divergence))
+    ).length;
 
     const busy = status !== undefined;
     const filteredOut = result
@@ -823,20 +909,6 @@ export default function MLignApp() {
                     </Paper>
                 )}
 
-                <DivergencePanel
-                    divergences={divergences}
-                    resolutions={resolutions}
-                    onResolve={(id, resolution) =>
-                        setResolutions((previous) => new Map(previous).set(id, resolution))
-                    }
-                    attribution={attribution}
-                    onAttribution={setAttribution}
-                    selected={selected}
-                    onSelect={setSelected}
-                    onApply={applyToScore}
-                    applying={busy}
-                />
-
                 {performed?.failed && <Alert severity="error">{performed.failed}</Alert>}
 
                 {performed?.mei && (
@@ -858,23 +930,96 @@ export default function MLignApp() {
                                 variant="outlined"
                                 sx={{ color: EXTRA_COLOUR, borderColor: EXTRA_COLOUR }}
                             />
+
+                            <Box sx={{ flexGrow: 1 }} />
+
+                            {/*
+                              * The only chrome the review needs. Everything else
+                              * is asked at the note it is about.
+                              */}
+                            {divergences.length > 0 && (
+                                <>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {undecided.length} of {divergences.length} undecided
+                                    </Typography>
+                                    <Button size="small" onClick={goToNext}>
+                                        Go to next
+                                    </Button>
+                                    <TextField
+                                        size="small"
+                                        label="Decided by"
+                                        value={attribution.resp}
+                                        onChange={(event) =>
+                                            setAttribution({
+                                                ...attribution,
+                                                resp: event.target.value,
+                                            })
+                                        }
+                                        sx={{ width: "9rem" }}
+                                    />
+                                    <TextField
+                                        size="small"
+                                        select
+                                        label="Certainty"
+                                        value={attribution.certainty}
+                                        onChange={(event) =>
+                                            setAttribution({
+                                                ...attribution,
+                                                certainty: event.target.value,
+                                            })
+                                        }
+                                        sx={{ width: "8rem" }}
+                                    >
+                                        {CERTAINTIES.map((certainty) => (
+                                            <MenuItem key={certainty} value={certainty}>
+                                                {certainty}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                    <Button
+                                        variant="contained"
+                                        size="small"
+                                        onClick={applyToScore}
+                                        disabled={pendingEdits === 0 || busy}
+                                    >
+                                        Apply {pendingEdits > 0 ? `${pendingEdits} ` : ""}to the
+                                        score
+                                    </Button>
+                                </>
+                            )}
                         </Stack>
 
-                        <div ref={scoreRef}>
+                        <div ref={scoreRef} onClick={handleScoreClick}>
                             <PerformedScore
                                 className="mlign-score"
                                 mei={performed.mei}
                                 extenders
                                 extraNotes={extraNotes}
-                                onExtraNoteClick={(id) =>
-                                    setSelected((current) => (current === id ? undefined : id))
-                                }
                                 options={{
                                     performanceScale: scale,
                                     performanceRecording: performed.recording,
                                 }}
                             />
                         </div>
+
+                        <DivergencePopover
+                            divergence={divergences.find(
+                                (divergence) => divergence.id === selected
+                            )}
+                            anchor={anchorEl}
+                            resolution={selected ? resolutions.get(selected) : undefined}
+                            onResolve={(id, resolution) =>
+                                setResolutions((previous) =>
+                                    new Map(previous).set(id, resolution)
+                                )
+                            }
+                            onClose={() => {
+                                setSelected(undefined);
+                                setAnchorEl(undefined);
+                            }}
+                            onNext={goToNext}
+                            remaining={undecided.length}
+                        />
                     </Box>
                 )}
             </Stack>
