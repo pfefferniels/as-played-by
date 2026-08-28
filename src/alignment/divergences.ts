@@ -89,6 +89,12 @@ export interface AddedDivergence {
     anchorFrom: "model" | "timing" | null;
     /** How sure the head was, when it is the head that answered */
     anchorConfidence?: number;
+    /**
+     * Whether an ornament sign the score already writes is what let a ranking
+     * the head was not confident about stand. Worth keeping: it says the anchor
+     * rests on two things agreeing rather than on the model alone.
+     */
+    anchorCorroborated?: boolean;
     /** The sign already on the anchor, which is what `written-ornament` rests on */
     signs: OrnamentSign[];
     reading: AddedReading;
@@ -162,6 +168,21 @@ export interface DivergenceOptions {
      */
     attributedGapMs?: number;
     /**
+     * How sure the attribution head must be, on its own, before its answer is
+     * taken: mass on "this ornaments that written note", against everything
+     * else including the note not being an ornament at all.
+     */
+    attributionConfidence?: number;
+    /**
+     * How sure it must be when the score corroborates it - when the written note
+     * it named is one the score already puts an ornament sign on. Lower, and
+     * legitimately so: this is no longer the head's word alone. It is the share
+     * of the head's ornament mass sitting on that one note, ignoring how much it
+     * put on the note being no ornament, because the engraved sign has already
+     * answered that question.
+     */
+    attributionShare?: number;
+    /**
      * How far from where a written note was due a played note may fall and still
      * be read as standing in for it. Wider than `simultaneousMs`, because the
      * moment is not measured but interpolated from the notes around it, and
@@ -182,6 +203,8 @@ const DEFAULTS = {
     figureNotes: 3,
     hasRepeats: false,
     attributedGapMs: 1000,
+    attributionConfidence: 0.35,
+    attributionShare: 0.5,
     replacementMs: 200,
     replacementSemitones: 12,
 };
@@ -208,6 +231,47 @@ interface Anchor {
 interface PlayedGroup {
     id: string;
     entries: { insertion: InsertedNote; span: NoteSpan }[];
+}
+
+/** The head's answer about one played note, once it has been believed. */
+interface AcceptedAnchor {
+    scoreId: string;
+    confidence: number;
+    /** Whether an ornament sign the score already writes is what let it in */
+    corroborated: boolean;
+}
+
+/**
+ * Which of the head's answers to take, and on what evidence.
+ *
+ * Two ways in, because on real playing the head's two numbers come apart. It
+ * will rank the right written note first, decisively, and still put most of its
+ * mass on the note not being an ornament at all - which is what it does on both
+ * of the trills Chopin's op. 9 no. 1 notates. Insisting on the first number
+ * alone throws those away; ignoring it accepts every played note as decoration
+ * of whatever it happens to lie nearest.
+ *
+ * So: the head's own confidence is enough on its own. Short of that, a clear
+ * ranking is enough when the note it named is one the score already writes an
+ * ornament sign on - because then two things that knew nothing about each other
+ * agree, and the sign has already answered the question the head was unsure of.
+ */
+function acceptAttribution(
+    insertion: InsertedNote,
+    signs: ReadonlyMap<string, OrnamentSign[]>,
+    minConfidence: number,
+    minShare: number
+): AcceptedAnchor | undefined {
+    const named = insertion.ornamentOf;
+    if (!named) return undefined;
+
+    if (named.confidence >= minConfidence) {
+        return { scoreId: named.scoreId, confidence: named.confidence, corroborated: false };
+    }
+    if (named.share >= minShare && (signs.get(named.scoreId)?.length ?? 0) > 0) {
+        return { scoreId: named.scoreId, confidence: named.confidence, corroborated: true };
+    }
+    return undefined;
 }
 
 interface UnplayedGroup {
@@ -257,10 +321,25 @@ export function divergencesOf(
     const firstMs = anchors.length > 0 ? anchors[0].onsetMs : Infinity;
     const lastMs = anchors.length > 0 ? anchors[anchors.length - 1].onsetMs : -Infinity;
 
+    // What the attribution head said, filtered down to what is worth acting on,
+    // once - because the grouping, the pairing and the reading all need the same
+    // answer and must not be able to disagree about it.
+    const accepted = new Map<string, AcceptedAnchor>();
+    for (const insertion of input.insertions) {
+        const answer = acceptAttribution(
+            insertion,
+            input.signs,
+            settings.attributionConfidence,
+            settings.attributionShare
+        );
+        if (answer) accepted.set(insertion.performanceId, answer);
+    }
+
     const played = groupPlayed(
         input,
         spanById,
         anchors,
+        accepted,
         settings.gapMs,
         settings.attributedGapMs
     );
@@ -270,6 +349,7 @@ export function divergencesOf(
         played,
         unplayed,
         timeMapOf(anchors),
+        accepted,
         settings
     );
 
@@ -277,6 +357,7 @@ export function divergencesOf(
         anchors,
         anchorByScoreId: new Map(anchors.map((anchor) => [anchor.scoreId, anchor])),
         scoreById,
+        accepted,
         firstMs,
         lastMs,
         simultaneousMs: settings.simultaneousMs,
@@ -307,6 +388,7 @@ function groupPlayed(
     input: DivergenceInput,
     spanById: Map<string, NoteSpan>,
     anchors: Anchor[],
+    accepted: ReadonlyMap<string, AcceptedAnchor>,
     gapMs: number,
     attributedGapMs: number
 ): PlayedGroup[] {
@@ -325,8 +407,8 @@ function groupPlayed(
         }
 
         const silence = entry.span.onsetMs - previous.span.onsetMs;
-        const named = entry.insertion.ornamentOf?.scoreId;
-        const namedBefore = previous.insertion.ornamentOf?.scoreId;
+        const named = accepted.get(entry.span.id)?.scoreId;
+        const namedBefore = accepted.get(previous.span.id)?.scoreId;
 
         // Two notes the model puts on the same written note are one figure, and
         // the timing only has to agree that they are in the same passage. Where
@@ -445,6 +527,7 @@ function pairReplacements(
     played: PlayedGroup[],
     unplayed: UnplayedGroup[],
     map: { onset: number; ms: number }[],
+    accepted: ReadonlyMap<string, AcceptedAnchor>,
     settings: typeof DEFAULTS
 ): { replaced: ReplacedDivergence[]; playedLeft: PlayedGroup[]; unplayedLeft: UnplayedGroup[] } {
     const candidates: {
@@ -464,7 +547,7 @@ function pairReplacements(
         .filter(
             (entry) =>
                 entry.group.entries.length === 1 &&
-                entry.group.entries[0].insertion.ornamentOf === undefined
+                !accepted.has(entry.group.entries[0].span.id)
         );
 
     unplayed.forEach((group, unplayedIndex) => {
@@ -598,6 +681,8 @@ interface AddedContext {
     /** The matched notes again, by id, for looking an attributed anchor up */
     anchorByScoreId: Map<string, Anchor>;
     scoreById: Map<string, ScoreNote>;
+    /** The head's answers, already judged sure enough to act on */
+    accepted: ReadonlyMap<string, AcceptedAnchor>;
     firstMs: number;
     lastMs: number;
     simultaneousMs: number;
@@ -621,11 +706,23 @@ interface AddedContext {
 function anchorOf(
     group: PlayedGroup,
     ctx: AddedContext
-): { anchor: Anchor | undefined; from: "model" | "timing" | null; confidence?: number } {
-    const named = group.entries[0].insertion.ornamentOf;
+): {
+    anchor: Anchor | undefined;
+    from: "model" | "timing" | null;
+    confidence?: number;
+    corroborated?: boolean;
+} {
+    const named = ctx.accepted.get(group.entries[0].span.id);
     if (named) {
         const matched = ctx.anchorByScoreId.get(named.scoreId);
-        if (matched) return { anchor: matched, from: "model", confidence: named.confidence };
+        if (matched) {
+            return {
+                anchor: matched,
+                from: "model",
+                confidence: named.confidence,
+                corroborated: named.corroborated,
+            };
+        }
 
         const note = ctx.scoreById.get(named.scoreId);
         if (note) {
@@ -638,6 +735,7 @@ function anchorOf(
                 },
                 from: "model",
                 confidence: named.confidence,
+                corroborated: named.corroborated,
             };
         }
     }
@@ -653,10 +751,16 @@ function readPlayed(
 ): AddedDivergence {
     const spans = group.entries.map((entry) => entry.span);
     const onsetMs = spans[0].onsetMs;
-    const { anchor, from, confidence } = anchorOf(group, ctx);
+    const { anchor, from, confidence, corroborated } = anchorOf(group, ctx);
     const signs = anchor ? input.signs.get(anchor.scoreId) ?? [] : [];
 
-    const { reading, because } = readAdded(spans, anchor, signs, ctx, from === "model" ? confidence : undefined);
+    const { reading, because } = readAdded(
+        spans,
+        anchor,
+        signs,
+        ctx,
+        from === "model" ? { confidence: confidence ?? 0, corroborated: !!corroborated } : undefined
+    );
 
     return {
         kind: "added",
@@ -665,7 +769,9 @@ function readPlayed(
         pitches: spans.map((span) => span.pitch),
         anchorId: anchor?.scoreId ?? null,
         anchorFrom: anchor ? from : null,
-        ...(from === "model" && confidence !== undefined ? { anchorConfidence: confidence } : {}),
+        ...(from === "model" && confidence !== undefined
+            ? { anchorConfidence: confidence, anchorCorroborated: !!corroborated }
+            : {}),
         signs,
         reading,
         because,
@@ -705,7 +811,7 @@ function readAdded(
     anchor: Anchor | undefined,
     signs: OrnamentSign[],
     ctx: AddedContext,
-    attributed?: number
+    attributed?: { confidence: number; corroborated: boolean }
 ): { reading: AddedReading; because: string } {
     const onsetMs = spans[0].onsetMs;
 
@@ -726,9 +832,17 @@ function readAdded(
                 `to match - these are that ornament, performed.` +
                 (attributed === undefined
                     ? ""
-                    : ` The model puts ${
-                          spans.length === 1 ? "this note" : `all ${spans.length} notes`
-                      } on that written note as well.`),
+                    : attributed.corroborated
+                      ? ` The model puts ${
+                            spans.length === 1 ? "this note" : `all ${spans.length} notes`
+                        } on that written note too - it ranks it clearly ahead of every other, ` +
+                        `though it is only ${Math.round(attributed.confidence * 100)}% sure they ` +
+                        `are ornaments at all. The sign is what settles that.`
+                      : ` The model puts ${
+                            spans.length === 1 ? "this note" : `all ${spans.length} notes`
+                        } on that written note as well, ${Math.round(
+                            attributed.confidence * 100
+                        )}% sure.`),
         };
     }
 
@@ -741,9 +855,9 @@ function readAdded(
             because:
                 `The model reads ${
                     spans.length === 1 ? "this note" : `these ${spans.length} notes`
-                } as ornamenting a written note, ${Math.round(attributed * 100)}% sure of ` +
-                `which one, and the score writes no ornament there. It has only ever been ` +
-                `taught this on rendered performances, so it is worth looking at.`,
+                } as ornamenting a written note, ${Math.round(attributed.confidence * 100)}% ` +
+                `sure, and the score writes no ornament there. It has only ever been taught ` +
+                `this on rendered performances, so it is worth looking at.`,
         };
     }
 

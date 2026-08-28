@@ -111,11 +111,16 @@ export interface InsertedNote {
      * A second, separate answer from the alignment, and the one no other aligner
      * gives: the match head is trained to send an ornament note to the null
      * column, so a note being an insertion and a note decorating a written note
-     * are compatible facts, not competing ones. Absent when the model has no
-     * attribution head, when it called the note no ornament at all, or when it
-     * was not sure enough to say — see `./attribution`.
+     * are compatible facts, not competing ones.
+     *
+     * Two numbers, and they mean different things: `confidence` is that this is
+     * an ornament and that it is that note's, `share` is that if it ornaments
+     * anything then it is that note. Absent only when the model has no
+     * attribution head, or when no window covered this note — what counts as
+     * sure enough is `../divergences`'s judgement, not this module's. See
+     * `./attribution`.
      */
-    ornamentOf?: { scoreId: string; confidence: number };
+    ornamentOf?: { scoreId: string; confidence: number; share: number };
 }
 
 /** What the alignment cost, for a status line and for reporting. */
@@ -317,6 +322,7 @@ export async function alignScoreToPerformance(
                           ornamentOf: {
                               scoreId: score[attributed.scoreIdx].id,
                               confidence: attributed.confidence,
+                              share: attributed.share,
                           },
                       }
                     : {}),

@@ -101,7 +101,9 @@ export function applyAlignment(
                 insertInsertionWhen(meiDoc, recording, span, {
                     confidence: divergence.confidence,
                     ornamentAnchor: divergence.anchorId,
-                    ornamentAnchorFrom: divergence.anchorFrom,
+                    ornamentAnchorFrom: divergence.anchorCorroborated
+                        ? "model-and-sign"
+                        : divergence.anchorFrom,
                     ornamentAnchorConfidence: divergence.anchorConfidence,
                     ornamentSlot: slot,
                     reading,

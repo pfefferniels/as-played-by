@@ -108,7 +108,7 @@ export const insertInsertionWhen = (
     extra: {
         confidence?: number;
         ornamentAnchor?: string | null;
-        ornamentAnchorFrom?: "model" | "timing" | null;
+        ornamentAnchorFrom?: "model" | "model-and-sign" | "timing" | null;
         ornamentAnchorConfidence?: number;
         ornamentSlot?: number;
         reading?: WhenReading;
@@ -134,10 +134,12 @@ export const insertInsertionWhen = (
     if (extra.ornamentAnchor) {
         extData(doc, when, "ornamentAnchor", "#" + extra.ornamentAnchor);
     }
-    // Where the anchor came from, because the two are not the same claim: the
-    // model was asked which written note this decorates, and timing only knows
-    // which one was struck last. A reader looking at this file later can tell
-    // an answer from a guess.
+    // Where the anchor came from, because these are not the same claim. The
+    // model was asked which written note this decorates; the timing only knows
+    // which one was struck last; `model-and-sign` means the model ranked that
+    // note clearly but was unsure it was an ornament at all, and an ornament
+    // sign the score already writes on that very note is what settled it. A
+    // reader coming back to this file can tell the three apart.
     if (extra.ornamentAnchor && extra.ornamentAnchorFrom) {
         extData(doc, when, "ornamentAnchorFrom", extra.ornamentAnchorFrom);
     }

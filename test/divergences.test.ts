@@ -41,8 +41,8 @@ const build = (opts: {
   spans?: NoteSpan[]
   matches?: { scoreId: string; performanceId: string }[]
   insertions?: string[]
-  /** What the model says each played note ornaments, where it says anything */
-  ornamentOf?: Record<string, string>
+  /** What the model says each played note ornaments: id, or [id, confidence, share] */
+  ornamentOf?: Record<string, string | [string, number, number]>
   deletions?: string[]
   signs?: [string, OrnamentSign[]][]
   hasRepeats?: boolean
@@ -61,9 +61,13 @@ const build = (opts: {
       insertions: (opts.insertions ?? []).map((performanceId) => ({
         performanceId,
         confidence: 0.5,
-        ...(opts.ornamentOf?.[performanceId]
-          ? { ornamentOf: { scoreId: opts.ornamentOf[performanceId], confidence: 0.9 } }
-          : {}),
+        ...(() => {
+          const said = opts.ornamentOf?.[performanceId]
+          if (!said) return {}
+          const [scoreId, confidence, share] =
+            typeof said === 'string' ? [said, 0.9, 0.95] : said
+          return { ornamentOf: { scoreId, confidence, share } }
+        })(),
       })),
       scoreNotes,
       spans,
@@ -521,5 +525,82 @@ describe('what the model says a played note ornaments', () => {
     })
 
     expect(replacedOnes(all)).toHaveLength(1)
+  })
+})
+
+describe('how sure the attribution head has to be', () => {
+  const unsure = (scoreId: string): [string, number, number] => [scoreId, 0.06, 0.8]
+
+  /**
+   * Three written notes, all played, and one extra played note at 2100 ms —
+   * after n2 was struck and well before n3, so the timing would hang it on n2
+   * and it is nowhere near the edges of what the recording covers.
+   */
+  const withExtra = (opts: {
+    ornamentOf?: Record<string, string | [string, number, number]>
+    signs?: [string, OrnamentSign[]][]
+  }) =>
+    build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('n2', 4, 67), scoreNote('n3', 8, 72)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('p3', 4000, 72), span('x1', 2100, 68)],
+      matches: [
+        { scoreId: 'n1', performanceId: 'p1' },
+        { scoreId: 'n2', performanceId: 'p2' },
+        { scoreId: 'n3', performanceId: 'p3' },
+      ],
+      insertions: ['x1'],
+      ...opts,
+    })
+
+  it('ignores an answer it is not confident in, and falls back on the timing', () => {
+    const all = withExtra({ ornamentOf: { x1: unsure('n1') } })
+
+    expect(addedOnes(all)[0].anchorId).toBe('n2')
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  /**
+   * The case that matters on real playing. Measured on the two trills Chopin's
+   * op. 9 no. 1 notates: the head ranks the right written note first and still
+   * puts most of its mass on the notes being no ornament at all. Alone that is
+   * not enough; against an engraved trill on the very note it named, it is.
+   */
+  it('takes a clear ranking it is unsure of when the score writes a sign on that note', () => {
+    const all = withExtra({
+      ornamentOf: { x1: unsure('n1') },
+      signs: [['n1', [trill]]],
+    })
+
+    const added = addedOnes(all)
+    expect(added[0].anchorId).toBe('n1')
+    expect(added[0].anchorFrom).toBe('model')
+    expect(added[0].anchorCorroborated).toBe(true)
+    expect(added[0].reading).toBe('written-ornament')
+    expect(added[0].because).toContain('The sign is what settles that')
+  })
+
+  it('does not take one whose ranking is muddled, sign or no sign', () => {
+    const all = withExtra({
+      ornamentOf: { x1: ['n1', 0.06, 0.2] },
+      signs: [['n1', [trill]]],
+    })
+
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  it('does not let a sign elsewhere in the score vouch for it', () => {
+    const all = withExtra({
+      ornamentOf: { x1: unsure('n1') },
+      signs: [['n3', [trill]]],
+    })
+
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  it('marks an answer it was confident in on its own as uncorroborated', () => {
+    const all = withExtra({ ornamentOf: { x1: 'n1' } })
+
+    expect(addedOnes(all)[0].anchorFrom).toBe('model')
+    expect(addedOnes(all)[0].anchorCorroborated).toBe(false)
   })
 })

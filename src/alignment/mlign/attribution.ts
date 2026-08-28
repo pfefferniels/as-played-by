@@ -22,46 +22,55 @@
  * time; under a distribution shift beyond its training settings that falls to
  * 89% and 70%. Good enough to propose with, nowhere near good enough to decide
  * with, which is why nothing here writes anything into a score.
+ *
+ * And on real playing it behaves differently again, which is why this returns
+ * two numbers rather than one. Measured against the two trills Chopin's op. 9
+ * no. 1 actually notates, on a recording of it: of the twelve played notes those
+ * two figures come to, the head ranks the right written note first for six, and
+ * on all but one of those it still puts most of its mass on the note not being
+ * an ornament at all. The ranking is worth having; the "not an ornament" column,
+ * on this material, is not what it was on the corpus.
  */
 
 import type { SimBundle } from "./types";
 import { UNCOVERED_SIM } from "./types";
 
-/** What the head says about one played note. */
+/**
+ * What the head says about one played note.
+ *
+ * Two numbers, because the head is answering two questions at once and they come
+ * apart badly in practice. `confidence` is the softmax over the whole row, so it
+ * is "this is an ornament, and it is that note's". `share` conditions on the
+ * first half: of the mass the head did put on ornamenting *something*, how much
+ * sits on this one written note.
+ *
+ * They come apart because the head's "not an ornament" column is the confident
+ * one. On a real recording it can rank the right principal first, decisively,
+ * and still put four fifths of its mass on the note not being an ornament at all.
+ * Collapsing that into one number throws away the half that was right, so both
+ * are handed on and the caller decides what each is worth.
+ */
 export interface Attributed {
-    /** Index into the score table of the note it ornaments. */
+    /** Index into the score table of the note it most likely ornaments. */
     scoreIdx: number;
-    /** Softmax over the row, so it is comparable across notes. */
+    /** Softmax over the whole row, "not an ornament" included. */
     confidence: number;
+    /** That note's share of the mass on ornamenting anything at all. */
+    share: number;
 }
 
 /**
- * How sure the head has to be before its answer is worth showing.
+ * Read the head for every played note it was asked about.
  *
- * The row is a softmax over every written note plus "not an ornament", so on a
- * long piece a genuinely uncertain note spreads its mass thinly and lands well
- * below this. The threshold is not a claim about calibration; it is there so
- * that a figure the head has no opinion about falls back on the timing rather
- * than being pinned to whichever written note edged the others out.
+ * Nothing is filtered here, deliberately. What counts as sure enough is an
+ * editorial question, not a model one, and it is answered in
+ * `../divergences` where the rest of the evidence about a note is - not least
+ * whether the score writes an ornament sign on the very note the head named.
+ *
+ * A played note no window covered is absent: no window looked at it, so the head
+ * did not decline to attribute it, it was never asked.
  */
-export const ATTRIBUTION_CONF = 0.35;
-
-/**
- * Read the head for every played note.
- *
- * The last column is "not an ornament", and it wins for the overwhelming
- * majority of played notes: most notes are notes, not decoration. Those are
- * absent from the result rather than present with a null, so that the map's size
- * is the number of ornament notes found and nothing has to be filtered later.
- *
- * A played note no window covered has the sentinel across its whole row and is
- * skipped: no window looked at it, so the head did not decline to attribute it,
- * it was never asked.
- */
-export function attributionsOf(
-    bundle: SimBundle,
-    minConfidence: number = ATTRIBUTION_CONF
-): Map<number, Attributed> {
+export function attributionsOf(bundle: SimBundle): Map<number, Attributed> {
     const { n, m, attr, attrNone } = bundle;
     const found = new Map<number, Attributed>();
     if (!attr || !attrNone) return found;
@@ -72,10 +81,10 @@ export function attributionsOf(
         if (none <= UNCOVERED_SIM) continue;
 
         let best = -1;
-        let bestLogit = none;
+        let bestLogit = -Infinity;
         for (let i = 0; i < n; i++) {
             const logit = attr[off + i];
-            if (logit > bestLogit) {
+            if (logit > UNCOVERED_SIM && logit > bestLogit) {
                 bestLogit = logit;
                 best = i;
             }
@@ -83,16 +92,22 @@ export function attributionsOf(
 
         if (best < 0) continue;
 
-        // Softmax over the row, taken against the same maximum the argmax found,
-        // which is what keeps it from overflowing on a long piece.
-        let total = Math.exp(none - bestLogit);
+        // Softmaxed against the largest logit in the row, which is what keeps
+        // the sum from overflowing on a long piece.
+        const top = Math.max(bestLogit, none);
+        let overScore = 0;
         for (let i = 0; i < n; i++) {
             const logit = attr[off + i];
-            if (logit > UNCOVERED_SIM) total += Math.exp(logit - bestLogit);
+            if (logit > UNCOVERED_SIM) overScore += Math.exp(logit - top);
         }
+        const noneWeight = Math.exp(none - top);
+        const bestWeight = Math.exp(bestLogit - top);
 
-        const confidence = 1 / total;
-        if (confidence >= minConfidence) found.set(j, { scoreIdx: best, confidence });
+        found.set(j, {
+            scoreIdx: best,
+            confidence: bestWeight / (overScore + noneWeight),
+            share: bestWeight / overScore,
+        });
     }
 
     return found;

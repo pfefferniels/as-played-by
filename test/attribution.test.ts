@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { attributionsOf, ATTRIBUTION_CONF } from '../src/alignment/mlign/attribution'
+import { attributionsOf } from '../src/alignment/mlign/attribution'
 import { accumulateLogits } from '../src/alignment/mlign/accumulate'
 import { UNCOVERED_SIM, type MlignRow, type SimBundle } from '../src/alignment/mlign/types'
 import type { EncoderOutput, MlignSession, ModelFeeds, RunOptions } from '../src/alignment/mlign/session'
@@ -22,21 +22,32 @@ describe('reading the ornament-attribution head', () => {
 
     expect(found.get(0)?.scoreIdx).toBe(1)
     expect(found.get(0)!.confidence).toBeGreaterThan(0.99)
+    expect(found.get(0)!.share).toBeGreaterThan(0.99)
   })
 
-  it('says nothing about a note it calls no ornament', () => {
-    // The "none" column wins, which is the answer for most played notes
-    const found = attributionsOf(bundle(3, 1, [[1, 2, 1]], [9]))
+  it('still ranks a note it calls no ornament, and says how little it believes it', () => {
+    // The "none" column wins by a mile, which is the answer for most played
+    // notes — but the ranking underneath it is still there to be looked at
+    const found = attributionsOf(bundle(3, 1, [[1, 4, 1]], [9]))
 
-    expect(found.size).toBe(0)
+    expect(found.get(0)?.scoreIdx).toBe(1)
+    expect(found.get(0)!.confidence).toBeLessThan(0.01)
+    expect(found.get(0)!.share).toBeGreaterThan(0.9)
   })
 
-  it('withholds an answer it is not sure enough of', () => {
-    // Two written notes neck and neck: the argmax is meaningless
-    const found = attributionsOf(bundle(2, 1, [[5, 5.01]], [4.9]))
+  it('keeps the two questions apart, because on real playing they come apart', () => {
+    // Sure which written note, unsure that it is an ornament at all: exactly
+    // what it does on a notated trill in a real recording
+    const found = attributionsOf(bundle(2, 1, [[0, 6]], [8]))
 
-    expect(found.size).toBe(0)
-    expect(attributionsOf(bundle(2, 1, [[5, 5.01]], [4.9]), 0).size).toBe(1)
+    expect(found.get(0)!.confidence).toBeLessThan(0.15)
+    expect(found.get(0)!.share).toBeGreaterThan(0.99)
+  })
+
+  it('decides nothing: every played note it was asked about comes back', () => {
+    const found = attributionsOf(bundle(2, 3, [[1, 2], [0, 0], [5, 1]], [9, 9, 9]))
+
+    expect(found.size).toBe(3)
   })
 
   it('says nothing at all about a played note no window covered', () => {
@@ -51,10 +62,10 @@ describe('reading the ornament-attribution head', () => {
     const many = Array.from({ length: 200 }, () => 1)
     many[7] = 2
 
-    const found = attributionsOf(bundle(200, 1, [many], [1]), 0)
+    const found = attributionsOf(bundle(200, 1, [many], [1]))
     expect(found.get(0)?.scoreIdx).toBe(7)
     // 2 against 200 ones: the argmax is right and worth very little
-    expect(found.get(0)!.confidence).toBeLessThan(ATTRIBUTION_CONF)
+    expect(found.get(0)!.confidence).toBeLessThan(0.05)
   })
 })
 
@@ -116,6 +127,7 @@ describe('accumulating the attribution head over windows', () => {
     })
     expect(asked.attr).toHaveLength(9)
     expect(attributionsOf(asked).get(0)?.scoreIdx).toBe(1)
+    expect(attributionsOf(asked).get(0)!.confidence).toBeGreaterThan(0.9)
   })
 
   it('leaves it out for a model whose graph has no such head', async () => {
