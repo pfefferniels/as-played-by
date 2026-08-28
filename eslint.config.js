@@ -1,9 +1,10 @@
-// NOTE: typescript-eslint does not run under TypeScript 7.0 — TS 7 dropped the
-// classic compiler API that its parser is built on, so `npm run lint` currently
-// fails at config load with "typescript-eslint does not support TS 7.0".
-// Tracking: https://github.com/typescript-eslint/typescript-eslint/issues/10940
-// This config is otherwise ready: linting works again as soon as typescript-eslint
-// ships TS >=7.1 support (or if typescript is pinned back to 5.9.x).
+// NOTE: TypeScript 7.0 ships no compiler API at all, so typescript-eslint - whose
+// parser imports it - cannot run against it. The fix is Microsoft's own: the 6.0
+// API is installed side by side under the `typescript` name, while TS 7 keeps the
+// `tsc` this project builds with. See the aliases in package.json.
+// Nothing here reads types, so 6.0 is only ever used to parse.
+// Revisit when typescript-eslint ports to the API TypeScript 7.1 will ship:
+// https://github.com/typescript-eslint/typescript-eslint/issues/10940
 
 import js from '@eslint/js'
 import globals from 'globals'

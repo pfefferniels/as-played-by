@@ -4,7 +4,8 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { PerformedScore, type PerformedNote } from '../src/verovio/PerformedScore'
+import { PerformedScore } from '../src/verovio/PerformedScore'
+import type { PerformedNote } from '../src/verovio/performedNote'
 import { unitsPerSecond } from '../src/verovio/toolkit'
 
 const mei = readFileSync(join(__dirname, '..', 'public', 'transcription.mei'), 'utf-8')

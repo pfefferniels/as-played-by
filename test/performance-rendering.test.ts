@@ -4,7 +4,7 @@ import { join } from 'path'
 import { JSDOM } from 'jsdom'
 import type { VerovioToolkit } from 'verovio/esm'
 import { loadVerovio, renderPerformance, defaultOptions } from '../src/verovio/toolkit'
-import { readPerformedNote } from '../src/verovio/PerformedScore'
+import { readPerformedNote } from '../src/verovio/performedNote'
 import { loadFixture, renderToPng, pixelDiff } from './setup'
 
 const SNAPSHOT_DIR = join(__dirname, '__snapshots__')
