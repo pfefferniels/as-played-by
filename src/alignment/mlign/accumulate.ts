@@ -4,7 +4,7 @@
  * The exported graph stops at the encoder, so the bilinear match, the null
  * logits and the overlap bookkeeping all live here. Reference implementation:
  * `MLign/src/mlign/infer.py::accumulate_logits`; the head itself is the `head`
- * block of `mlign-v1-fp16.onnx.json`.
+ * block of `mlign-v2-fp16.onnx.json`.
  *
  * Only *types* are imported from `session.ts`, and `featurize.ts` is pure, so
  * this module pulls in no onnxruntime code: the one thing here that needs a

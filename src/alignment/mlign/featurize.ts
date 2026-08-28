@@ -3,7 +3,7 @@
  *
  * Mirrors `MLign/src/mlign/dataset.py:featurize` for the B = 1, unpadded case,
  * and `infer.py:tables_to_row` for the step before it. The authoritative
- * statement of the layout is the `featurize` block of `models/mlign-v1.onnx.json`;
+ * statement of the layout is the `featurize` block of `models/mlign-v2.onnx.json`;
  * this file is that block turned into code, with the Python consulted only where
  * the sidecar leaves a detail implicit.
  *

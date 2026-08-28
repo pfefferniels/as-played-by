@@ -6,7 +6,7 @@
  * `accumulate.ts`. This module is only responsible for getting the weights into
  * the browser and turning one window's feeds into those five tensors.
  *
- * The contract is `MLign/models/mlign-v1-fp16.onnx.json`; the shapes below are
+ * The contract is `MLign/models/mlign-v2-fp16.onnx.json`; the shapes below are
  * that file's `graph` block.
  *
  * Nothing here touches the DOM, so the whole module can be moved behind a Web
@@ -22,7 +22,7 @@ import * as ort from "onnxruntime-web/wasm";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 
 /** The model as shipped in `public/`. Fetched at run time, never imported. */
-export const MODEL_FILE = "mlign-v1-fp16.onnx";
+export const MODEL_FILE = "mlign-v2-fp16.onnx";
 
 /**
  * One window's model inputs, as `featurize.ts` produces them.
