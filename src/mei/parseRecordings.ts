@@ -15,11 +15,13 @@ export interface PedalEvent {
  * makes a review survive being saved and reopened.
  */
 export interface RecordedDivergence {
-    kind: "insertion" | "deletion";
-    /** The played note, for an insertion */
+    kind: "insertion" | "deletion" | "substitution";
+    /** The played note, for an insertion or a substitution */
     span?: NoteSpan;
-    /** The written note, for a deletion */
+    /** The written note, for a deletion or a substitution */
     scoreId?: string;
+    /** What the score writes, where the recording played something else */
+    writtenPitch?: number;
     confidence?: number;
     reading?: string;
     resp?: string;
@@ -98,6 +100,7 @@ export function parseRecordings(mei: string): {
             let certainty: string | undefined;
             let ornamentAnchor: string | undefined;
             let ornamentSlot: number | undefined;
+            let writtenPitch: number | undefined;
 
             for (let i = 0; i < extDatas.length; i++) {
                 const ext = extDatas[i];
@@ -114,6 +117,7 @@ export function parseRecordings(mei: string): {
                 else if (etype === "certainty") certainty = text;
                 else if (etype === "ornamentAnchor") ornamentAnchor = text.replace(/^#/, "");
                 else if (etype === "ornamentSlot") ornamentSlot = parseInt(text, 10);
+                else if (etype === "writtenPitch") writtenPitch = parseInt(text, 10);
             }
 
             // A written note that was never played: a note and no moment.
@@ -154,6 +158,38 @@ export function parseRecordings(mei: string): {
                     certainty,
                     ornamentAnchor,
                     ornamentSlot,
+                });
+                continue;
+            }
+
+            // A written note played as a different note: a note and a moment, and
+            // a pitch that is not the one written. It counts as sounding, so it
+            // goes into the spans as well - at the pitch actually heard, which is
+            // what a recording is a record of.
+            if (type === "substitution" && dataAttr) {
+                const noteId = dataAttr.replace(/^#/, "");
+                const span: NoteSpan = {
+                    type: "note",
+                    id: when.getAttribute("corresp") || noteId,
+                    onset: onsetTicks,
+                    offset: onsetTicks + durationTicks,
+                    onsetMs,
+                    offsetMs: onsetMs + durationMs,
+                    pitch: pitch ?? pitchMap.get(noteId) ?? 0,
+                    velocity,
+                    channel: 0,
+                };
+
+                noteSpans.set(noteId, span);
+                divergences.push({
+                    kind: "substitution",
+                    scoreId: noteId,
+                    span,
+                    writtenPitch: writtenPitch ?? pitchMap.get(noteId),
+                    confidence,
+                    reading,
+                    resp,
+                    certainty,
                 });
                 continue;
             }

@@ -17,6 +17,7 @@ const readingTypes = [
     'ornamentation',
     'simplification',
     'rythmic-alteration',
+    'substitution',
     'unknown'
 ] as const;
 type ReadingType = typeof readingTypes[number];

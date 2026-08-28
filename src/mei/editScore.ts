@@ -37,6 +37,7 @@ export type ReadingReason =
     | "ornamentation"
     | "simplification"
     | "rythmic-alteration"
+    | "substitution"
     | "unknown";
 
 /**
@@ -81,7 +82,7 @@ export function addPlayedNotes(
 
     // The written note is played too, so the reading holds it as well as the rest
     supplied.appendChild(anchor.cloneNode(true));
-    for (const span of spans) supplied.appendChild(noteFor(doc, span, tonic));
+    for (const span of spans) supplied.appendChild(noteFor(doc, span, tonic, anchor));
 
     return true;
 }
@@ -124,6 +125,48 @@ export function markUnplayed(
     performance.setAttribute("reason", "simplification");
     app.appendChild(performance);
     performance.appendChild(suppliedFor(doc, attribution));
+
+    return true;
+}
+
+/**
+ * Record that a written note was played as a different note.
+ *
+ * The classic use of an <app>, and the only edit here where the performance
+ * reading genuinely *replaces* the original rather than adding to it: the score
+ * says one note, the recording another, at the same moment. Both stay, each in
+ * its own <rdg>, and nothing chooses between them - which of the two an edition
+ * prints is not something an alignment gets to decide.
+ *
+ * The new note keeps the played span's id, so that aligning the edited score
+ * again matches it instead of turning it up as an addition all over again.
+ */
+export function replaceWithPlayed(
+    doc: Document,
+    scoreId: string,
+    span: NoteSpan,
+    tonic: string,
+    attribution: Attribution = {}
+): boolean {
+    const written = doc.querySelector(`[*|id="${cssEscape(scoreId)}"]`);
+    if (!written?.parentElement) return false;
+
+    const app = doc.createElementNS(MEI_NS, "app");
+    written.parentElement.insertBefore(app, written);
+
+    const original = doc.createElementNS(MEI_NS, "rdg");
+    original.setAttribute("source", "original");
+    app.appendChild(original);
+    original.appendChild(written);
+
+    const performance = doc.createElementNS(MEI_NS, "rdg");
+    performance.setAttribute("source", "performance");
+    performance.setAttribute("reason", "substitution");
+    app.appendChild(performance);
+
+    const supplied = suppliedFor(doc, attribution);
+    performance.appendChild(supplied);
+    supplied.appendChild(noteFor(doc, span, tonic, written));
 
     return true;
 }
@@ -176,8 +219,13 @@ function suppliedFor(doc: Document, attribution: Attribution): Element {
  * It keeps the span's own id so the next alignment can match it, and it is
  * spelled in the key rather than written with a fixed accidental, so that an
  * added note in D flat is not drawn as a C sharp.
+ *
+ * Its rhythm is taken from the written note it stands with, because that is the
+ * only thing that can supply one: a MIDI span knows how long a key was held,
+ * which is not what `@dur` means. A note with no duration at all would leave the
+ * measure it lands in unengravable.
  */
-function noteFor(doc: Document, span: NoteSpan, tonic: string): Element {
+function noteFor(doc: Document, span: NoteSpan, tonic: string, like?: Element): Element {
     const note = doc.createElementNS(MEI_NS, "note");
     const parsed = spellMidi(span.pitch, tonic).name.match(/^([A-G])([#b]*)(-?\d+)$/);
 
@@ -185,6 +233,11 @@ function noteFor(doc: Document, span: NoteSpan, tonic: string): Element {
         note.setAttribute("pname", parsed[1].toLowerCase());
         note.setAttribute("oct", parsed[3]);
         if (parsed[2]) note.setAttribute("accid", parsed[2] === "#" ? "s" : parsed[2] === "b" ? "f" : parsed[2]);
+    }
+
+    for (const attribute of ["dur", "dots", "staff", "layer"]) {
+        const value = like?.getAttribute(attribute);
+        if (value) note.setAttribute(attribute, value);
     }
 
     note.setAttribute("xml:id", span.id);

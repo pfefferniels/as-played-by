@@ -6,7 +6,12 @@
  * pass that carries the decisions into the document.
  */
 
-import type { AddedReading, Divergence, MissingReading } from "../alignment/divergences";
+import type {
+    AddedReading,
+    Divergence,
+    MissingReading,
+    ReplacedReading,
+} from "../alignment/divergences";
 
 /** What the reader wants done about a divergence. */
 export type Action =
@@ -14,10 +19,14 @@ export type Action =
     | "record"
     /** Write the played notes into the score, as a performance reading */
     | "write-notes"
+    /** Write the note that was played instead, as a performance reading */
+    | "write-variant"
     /** Put an ornament sign on the note that was decorated */
     | "add-sign"
     /** Mark the unplayed notes as a simplification */
     | "mark-simplification"
+    /** Take the played note for the written one: the aligner missed the match */
+    | "count-as-played"
     /** Not about the music at all */
     | "ignore";
 
@@ -51,10 +60,19 @@ export const MISSING_LABELS: Record<MissingReading, string> = {
     outside: "Beyond where the recording reaches",
 };
 
+export const REPLACED_LABELS: Record<ReplacedReading, string> = {
+    "unmatched-pair": "Played as written, and matched to nothing",
+    "neighbour-slip": "A neighbouring note played instead",
+    "octave-displaced": "Played in another octave",
+    "different-note": "A different note played instead",
+};
+
 export const labelOf = (divergence: Divergence): string =>
     divergence.kind === "added"
         ? ADDED_LABELS[divergence.reading]
-        : MISSING_LABELS[divergence.reading];
+        : divergence.kind === "missing"
+          ? MISSING_LABELS[divergence.reading]
+          : REPLACED_LABELS[divergence.reading];
 
 /**
  * What may be done about each family, first entry first.
@@ -63,6 +81,11 @@ export const labelOf = (divergence: Divergence): string =>
  * note is ornamented, and the only new fact is how it was played this time,
  * which belongs in the recording. Offering to "add" those notes would invite
  * writing a trill out as notation, which is not what the sign means.
+ *
+ * A pair the aligner failed to make is the one family whose first offer is not
+ * `record`, because there is nothing musical to record: the note was played as
+ * written and only the alignment says otherwise, so the useful thing to do is
+ * mend the alignment.
  */
 export const ACTIONS: Record<string, Action[]> = {
     "written-ornament": ["record"],
@@ -74,29 +97,51 @@ export const ACTIONS: Record<string, Action[]> = {
     "thinned-chord": ["record", "mark-simplification"],
     "omitted-note": ["record", "mark-simplification"],
     "omitted-passage": ["record", "mark-simplification"],
+    "unmatched-pair": ["count-as-played", "record"],
+    "neighbour-slip": ["record", "write-variant", "count-as-played"],
+    "octave-displaced": ["record", "write-variant"],
+    "different-note": ["record", "write-variant"],
     outside: ["ignore", "record"],
 };
 
 export const ACTION_LABELS: Record<Action, string> = {
     record: "Record only",
     "write-notes": "Write into the score",
+    "write-variant": "Write the played note as a variant",
     "add-sign": "Add an ornament sign",
     "mark-simplification": "Mark as a simplification",
+    "count-as-played": "Count as played",
     ignore: "Ignore",
 };
 
 /**
- * What a divergence does if nobody says otherwise.
+ * What a divergence does if nobody says otherwise: whatever its family offers
+ * first.
  *
- * Everything is recorded and nothing is written, except what is not about the
- * music at all. An edition is not changed because an aligner proposed something.
+ * Which is `record` almost everywhere - everything is recorded and nothing is
+ * written, because an edition is not changed because an aligner proposed
+ * something. The exceptions are the two families that are not about the music:
+ * what falls outside the recording is ignored, and a pair the aligner failed to
+ * make is simply made.
  */
 export const defaultAction = (divergence: Divergence): Action =>
-    divergence.reading === "outside" ? "ignore" : "record";
+    ACTIONS[divergence.reading]?.[0] ?? "record";
 
-/** Whether a decision would change the notation, rather than only the recording. */
-export const changesNotation = (action: Action): boolean =>
-    action !== "record" && action !== "ignore";
+/**
+ * Whether a decision would change the notation, rather than only the recording.
+ *
+ * `count-as-played` does not: it says two things the aligner kept apart are one
+ * note, which is a fact about the matching and belongs in the <recording> like
+ * every other match.
+ */
+const NOTATION_ACTIONS = new Set<Action>([
+    "write-notes",
+    "write-variant",
+    "add-sign",
+    "mark-simplification",
+]);
+
+export const changesNotation = (action: Action): boolean => NOTATION_ACTIONS.has(action);
 
 export function timestamp(ms: number): string {
     const seconds = ms / 1000;

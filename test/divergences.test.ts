@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { divergencesOf, type AddedDivergence, type MissingDivergence } from '../src/alignment/divergences'
+import {
+  divergencesOf,
+  type AddedDivergence,
+  type MissingDivergence,
+  type ReplacedDivergence,
+} from '../src/alignment/divergences'
+import { defaultAction } from '../src/ui/divergenceReadings'
 import type { OrnamentSign } from '../src/mei/ornamentSigns'
 import type { NoteSpan } from '../src/performance/midiSpans'
 import type { ScoreNote } from '../src/score/scoreNotes'
@@ -216,5 +222,166 @@ describe('written notes the recording never played', () => {
     })
 
     expect(missingOnes(all)[0].reading).toBe('outside')
+  })
+})
+
+const replacedOnes = (all: ReturnType<typeof build>) =>
+  all.filter((d): d is ReplacedDivergence => d.kind === 'replaced')
+
+/**
+ * The default alignment is a metronome: n1 at score onset 0 was played at 0 ms,
+ * n2 at onset 4 at 2000 ms, so a written note at onset 2 was due at 1000 ms.
+ */
+describe('a written note and the played note that stood in for it', () => {
+  it('pairs a deletion and an insertion at the same moment into one substitution', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1010, 65)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    expect(addedOnes(all)).toHaveLength(0)
+    expect(missingOnes(all)).toHaveLength(0)
+
+    const replaced = replacedOnes(all)
+    expect(replaced).toHaveLength(1)
+    expect(replaced[0].scoreId).toBe('a')
+    expect(replaced[0].perfId).toBe('x1')
+    expect(replaced[0].pitches).toEqual([64, 65])
+    expect(replaced[0].reading).toBe('neighbour-slip')
+  })
+
+  it('reads the written note struck an octave off as the note itself, displaced', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1000, 52)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    const replaced = replacedOnes(all)
+    expect(replaced[0].reading).toBe('octave-displaced')
+    expect(replaced[0].because).toContain('an octave lower')
+  })
+
+  it('reads the very same pitch at the very same moment as a match the aligner missed', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1000, 64)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    const replaced = replacedOnes(all)
+    expect(replaced[0].reading).toBe('unmatched-pair')
+    // Which is the one family whose first offer is to mend the alignment
+    expect(defaultAction(replaced[0])).toBe('count-as-played')
+  })
+
+  it('reads a note far from the written one, at its moment, as a different note', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1000, 71)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    expect(replacedOnes(all)[0].reading).toBe('different-note')
+  })
+
+  it('prefers a substitution to a chord thinned and filled out at the same instant', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('n1b', 0, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 5, 65)],
+      deletions: ['n1b'],
+      insertions: ['x1'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(1)
+    expect(missingOnes(all)).toHaveLength(0)
+    expect(addedOnes(all)).toHaveLength(0)
+  })
+
+  it('leaves a played note too far from the written note’s moment alone', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1400, 65)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(0)
+    expect(missingOnes(all)).toHaveLength(1)
+    expect(addedOnes(all)).toHaveLength(1)
+  })
+
+  it('leaves a played note further than an octave from the written one alone', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('a', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1000, 50)],
+      deletions: ['a'],
+      insertions: ['x1'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(0)
+    expect(missingOnes(all)).toHaveLength(1)
+  })
+
+  it('does not read a passage played differently as a run of single substitutions', () => {
+    const all = build({
+      scoreNotes: [
+        scoreNote('n1', 0, 60),
+        scoreNote('a', 1, 62),
+        scoreNote('b', 2, 64),
+        scoreNote('n2', 4, 67),
+      ],
+      spans: [
+        span('p1', 0, 60),
+        span('p2', 2000, 67),
+        span('x1', 500, 63),
+        span('x2', 1000, 65),
+      ],
+      deletions: ['a', 'b'],
+      insertions: ['x1', 'x2'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(0)
+    expect(missingOnes(all)).toHaveLength(1)
+    expect(addedOnes(all)).toHaveLength(2)
+  })
+
+  it('gives one played note to one written note, and takes the nearer reading first', () => {
+    const all = build({
+      // Two unplayed notes close enough that either could claim the played one:
+      // the chord tone due at 0 ms, and `a` due at 100 ms. They stay separate
+      // groups because one thins a chord that was otherwise played and the other
+      // does not.
+      scoreNotes: [
+        scoreNote('n1', 0, 60),
+        scoreNote('chordTone', 0, 64),
+        scoreNote('a', 0.2, 65),
+        scoreNote('n2', 4, 67),
+      ],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 90, 65)],
+      deletions: ['chordTone', 'a'],
+      insertions: ['x1'],
+    })
+
+    const replaced = replacedOnes(all)
+    expect(replaced).toHaveLength(1)
+    expect(replaced[0].scoreId).toBe('a')
+    expect(missingOnes(all).flatMap((d) => d.scoreIds)).toEqual(['chordTone'])
+  })
+
+  it('will not pair beyond where the matched notes reach', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('n2', 4, 67), scoreNote('late', 6, 72)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 3000, 71)],
+      deletions: ['late'],
+      insertions: ['x1'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(0)
   })
 })

@@ -166,6 +166,49 @@ export const insertDeletionWhen = (
     applyReading(doc, when, extra.reading);
 };
 
+/**
+ * A written note the recording played as a different note.
+ *
+ * The only shape that carries `@data` and `@absolute` at once and still is not a
+ * match: there is a note *and* a moment, and what differs is the pitch, which is
+ * why the pitch actually sounded is written into `<extData type="pitch">` the way
+ * an insertion's is. Read without that, it is exactly a match - which is what it
+ * musically is, a written note that sounded - so the fork lays the note out at
+ * the moment it was struck rather than leaving it behind as unplayed. That is the
+ * right picture: the note was not skipped, it came out differently.
+ */
+export const insertSubstitutionWhen = (
+    doc: Document,
+    recording: Element,
+    scoreId: string,
+    span: NoteSpan,
+    extra: { writtenPitch?: number; confidence?: number; reading?: WhenReading } = {}
+) => {
+    const when = doc.createElementNS(MEI_NS, "when");
+    recording.appendChild(when);
+
+    when.setAttribute("absolute", span.onsetMs.toFixed(0) + "ms");
+    when.setAttribute("abstype", "smil");
+    when.setAttribute("corresp", span.link || span.id);
+    when.setAttribute("data", "#" + scoreId);
+    when.setAttribute("type", "substitution");
+
+    extData(doc, when, "pitch", span.pitch.toString());
+    if (extra.writtenPitch !== undefined) {
+        extData(doc, when, "writtenPitch", extra.writtenPitch.toString());
+    }
+    extData(doc, when, "velocity", span.velocity.toString());
+    extData(doc, when, "duration", (span.offsetMs - span.onsetMs).toFixed(0) + "ms");
+    extData(doc, when, "onsetTicks", span.onset.toString());
+    extData(doc, when, "durationTicks", (span.offset - span.onset).toString());
+
+    if (extra.confidence !== undefined) {
+        extData(doc, when, "confidence", extra.confidence.toFixed(3));
+    }
+
+    applyReading(doc, when, extra.reading);
+};
+
 function applyReading(doc: Document, when: Element, reading?: WhenReading) {
     if (!reading) return;
 

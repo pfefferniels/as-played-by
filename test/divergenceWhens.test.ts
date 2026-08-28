@@ -51,6 +51,20 @@ const added = (perfIds: string[], anchorId: string | null): Divergence => ({
 const divergencesIn = (doc: string) =>
   parseRecordings(doc).recordings.flatMap((r) => r.divergences)
 
+const replaced = (scoreId: string, perfId: string, pitches: [number, number]): Divergence => ({
+  kind: 'replaced',
+  id: 'replaced-missing-0',
+  scoreId,
+  perfId,
+  pitches,
+  reading: 'neighbour-slip',
+  because: 'a semitone above the written note',
+  onset: 0,
+  onsetMs: 0,
+  lateMs: 12,
+  confidence: 0.27,
+})
+
 const missing = (scoreIds: string[]): Divergence => ({
   kind: 'missing',
   id: 'missing-0',
@@ -129,6 +143,63 @@ describe('writing divergences into the recording', () => {
     expect(deletion?.reading).toBe('thinned-chord')
   })
 
+  it('gives a written note played as another note a <when> carrying both', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [replaced(scoreId, spans[0].id, [60, 61])],
+    })
+
+    const doc = new DOMParser().parseFromString(result, 'application/xml')
+    expect(doc.querySelector('parsererror')).toBeNull()
+
+    // The one shape with a note *and* a moment that is still not a match: what
+    // differs is the pitch, so the pitch actually sounded is what it carries
+    const when = doc.querySelector('when[type="substitution"]')
+    expect(when).not.toBeNull()
+    expect(when!.getAttribute('data')).toBe(`#${scoreId}`)
+    expect(when!.getAttribute('absolute')).toBe(`${spans[0].onsetMs.toFixed(0)}ms`)
+    expect(when!.querySelector('extData[type="pitch"]')?.textContent).toBe(
+      String(spans[0].pitch)
+    )
+    expect(when!.querySelector('extData[type="writtenPitch"]')?.textContent).toBe('60')
+  })
+
+  it('reads a substitution back as both a divergence and a note that sounded', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [replaced(scoreId, spans[0].id, [60, spans[0].pitch])],
+    })
+
+    const { recordings } = parseRecordings(result)
+    const found = recordings
+      .flatMap((r) => r.divergences)
+      .find((d) => d.kind === 'substitution')
+
+    expect(found?.scoreId).toBe(scoreId)
+    expect(found?.span?.pitch).toBe(spans[0].pitch)
+    expect(found?.writtenPitch).toBe(60)
+    expect(found?.reading).toBe('neighbour-slip')
+
+    // It sounded, so it belongs among the spans as well as among the disagreements
+    const carrying = recordings.find((r) => r.noteSpans.has(scoreId))
+    expect(carrying?.noteSpans.get(scoreId)?.onsetMs).toBe(spans[0].onsetMs)
+  })
+
+  it('writes a pair the reader confirmed the aligner should have made as a plain match', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [replaced(scoreId, spans[0].id, [60, 60])],
+      resolutions: new Map([
+        ['replaced-missing-0', { reading: 'unmatched-pair', action: 'count-as-played' }],
+      ]),
+    })
+
+    const doc = new DOMParser().parseFromString(result, 'application/xml')
+    expect(doc.querySelector('when[type="substitution"]')).toBeNull()
+
+    const when = doc.querySelector(`when[data="#${scoreId}"]`)
+    expect(when).not.toBeNull()
+    expect(when!.hasAttribute('type')).toBe(false)
+    expect(when!.getAttribute('absolute')).toBe(`${spans[0].onsetMs.toFixed(0)}ms`)
+  })
+
   it('records the reading the reader settled on rather than the proposed one', () => {
     const result = applyAlignment(mei, midi, [], {
       divergences: [added([spans[0].id], scoreId)],
@@ -189,5 +260,25 @@ describe('the vendored fork, given those <when>s in the recording it lays out fr
     expect(drawnBefore.size).toBeGreaterThan(10)
     expect(drawnAfter.size).toBe(drawnBefore.size)
     for (const [id, x] of drawnBefore) expect(drawnAfter.get(id)).toBeCloseTo(x, 5)
+  }, 60_000)
+
+  // And this is the licence for giving a substitution both @data and @absolute:
+  // the note did sound, so it should be laid out where it sounded rather than
+  // left behind with the notes the recording never reached.
+  it('lays a substitution out exactly where the same note as a plain match is laid out', () => {
+    const pairs = [...parseRecordings(mei).recordings[0].noteSpans.entries()]
+      .slice(0, 20)
+      .map(([score_id, span]) => ({ score_id, performance_id: span.id }))
+
+    const asMatch = applyAlignment(mei, midi, pairs)
+    const asSubstitution = applyAlignment(mei, midi, pairs.slice(1), {
+      divergences: [replaced(pairs[0].score_id, pairs[0].performance_id, [60, 61])],
+    })
+
+    const drawnAsMatch = noteheadXs(asMatch)
+    const drawnAsSubstitution = noteheadXs(asSubstitution)
+
+    expect(drawnAsMatch.has(pairs[0].score_id)).toBe(true)
+    for (const [id, x] of drawnAsMatch) expect(drawnAsSubstitution.get(id)).toBeCloseTo(x, 5)
   }, 60_000)
 })

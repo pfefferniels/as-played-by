@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest'
-import { addOrnamentSign, addPlayedNotes, markUnplayed } from '../src/mei/editScore'
+import {
+  addOrnamentSign,
+  addPlayedNotes,
+  markUnplayed,
+  replaceWithPlayed,
+} from '../src/mei/editScore'
 import type { NoteSpan } from '../src/performance/midiSpans'
 
 const score = `<?xml version="1.0" encoding="UTF-8"?>
@@ -134,5 +139,45 @@ describe('putting an ornament sign on a note that had none', () => {
     addOrnamentSign(doc, 'n2', 'mordent')
 
     expect(doc.querySelectorAll('note')).toHaveLength(before)
+  })
+})
+
+describe('a written note played as a different note', () => {
+  it('puts the played note beside the written one, and chooses neither', () => {
+    const doc = parse()
+    expect(replaceWithPlayed(doc, 'n2', span('x1', 61), 'C')).toBe(true)
+
+    const app = doc.querySelector('app')
+    expect(app).not.toBeNull()
+
+    const written = app!.querySelector('rdg[source="original"] note')
+    expect(written!.getAttribute('xml:id')).toBe('n2')
+    expect(written!.getAttribute('pname')).toBe('d')
+
+    const performance = app!.querySelector('rdg[source="performance"]')
+    expect(performance!.getAttribute('reason')).toBe('substitution')
+
+    // Unlike an addition, the reading holds the substitute alone: the written
+    // note is what it stood in for, not something that sounded beside it
+    const played = [...performance!.querySelectorAll('note')]
+    expect(played).toHaveLength(1)
+    expect(played[0].getAttribute('pname')).toBe('c')
+    expect(played[0].getAttribute('accid')).toBe('s')
+    expect(played[0].getAttribute('xml:id')).toBe('x1')
+  })
+
+  it('gives the substitute the rhythm of the note it stands in for', () => {
+    const doc = parse()
+    replaceWithPlayed(doc, 'n2', span('x1', 61), 'C')
+
+    const played = doc.querySelector('rdg[source="performance"] note')
+    expect(played!.getAttribute('dur')).toBe('4')
+  })
+
+  it('leaves the document alone where the note is not in it', () => {
+    const doc = parse()
+    expect(replaceWithPlayed(doc, 'no-such-note', span('x1', 61), 'C')).toBe(false)
+    expect(doc.querySelector('app')).toBeNull()
+    expect(serialize(doc)).toContain('<note xml:id="n2" pname="d" oct="4" dur="4"/>')
   })
 })

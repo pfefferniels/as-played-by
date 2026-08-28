@@ -14,6 +14,13 @@
  * about one is nothing like what should be done about another. Naming the
  * families is what turns a list into a review.
  *
+ * The third family is the one the aligner cannot see at all. It labels every
+ * note either matched or unmatched, so a written note played as a different note
+ * comes back as two independent facts - a note missing here, a note added there -
+ * when it is one: the performer played *this* instead of *that*. Pairing them
+ * back up is done here, before anything is read, because a pair is a strictly
+ * better account of both halves than either half has on its own.
+ *
  * Nothing here is decided on the reader's behalf: every divergence carries a
  * proposed reading and the reason for it, and the reader confirms or overrules.
  */
@@ -51,6 +58,17 @@ export type MissingReading =
     /** Beyond where the recording reaches - not something the performer did */
     | "outside";
 
+/** What was played in place of a written note. */
+export type ReplacedReading =
+    /** The written note itself, which the aligner failed to pair with it */
+    | "unmatched-pair"
+    /** A neighbour: the slip of a semitone or a tone that every pianist makes */
+    | "neighbour-slip"
+    /** The written note, taken in another octave */
+    | "octave-displaced"
+    /** Some other note in its place */
+    | "different-note";
+
 export interface AddedDivergence {
     kind: "added";
     id: string;
@@ -82,7 +100,35 @@ export interface MissingDivergence {
     confidence: number;
 }
 
-export type Divergence = AddedDivergence | MissingDivergence;
+/**
+ * One written note and the played note that stood in for it.
+ *
+ * It carries both halves, because both are true and the edition needs both: the
+ * score says one note, the recording says another, at the moment the first was
+ * due. Written into the MEI it becomes a single <when> carrying `@data` and
+ * `@absolute` at once - the written note, sounding, at a pitch of its own.
+ */
+export interface ReplacedDivergence {
+    kind: "replaced";
+    id: string;
+    /** The written note, which the recording did not play as written */
+    scoreId: string;
+    /** What was played in its place */
+    perfId: string;
+    /** The written pitch and the played one, in that order */
+    pitches: [written: number, played: number];
+    reading: ReplacedReading;
+    because: string;
+    /** Where in the score it falls, in quarter notes */
+    onset: number;
+    /** When the substitute was struck */
+    onsetMs: number;
+    /** How far the played note fell from where the written one was due */
+    lateMs: number;
+    confidence: number;
+}
+
+export type Divergence = AddedDivergence | MissingDivergence | ReplacedDivergence;
 
 export interface DivergenceOptions {
     /**
@@ -96,6 +142,19 @@ export interface DivergenceOptions {
     figureNotes?: number;
     /** Whether the score writes a repeat with signs rather than writing it out */
     hasRepeats?: boolean;
+    /**
+     * How far from where a written note was due a played note may fall and still
+     * be read as standing in for it. Wider than `simultaneousMs`, because the
+     * moment is not measured but interpolated from the notes around it, and
+     * narrow enough that it stays inside the beat at any reasonable tempo.
+     */
+    replacementMs?: number;
+    /**
+     * How far a substitute may lie from the note it replaced. An octave: beyond
+     * that the two are more readily two things that happened than one thing that
+     * went differently.
+     */
+    replacementSemitones?: number;
 }
 
 const DEFAULTS = {
@@ -103,6 +162,8 @@ const DEFAULTS = {
     simultaneousMs: 50,
     figureNotes: 3,
     hasRepeats: false,
+    replacementMs: 200,
+    replacementSemitones: 12,
 };
 
 export interface DivergenceInput {
@@ -114,30 +175,58 @@ export interface DivergenceInput {
     signs: ReadonlyMap<string, OrnamentSign[]>;
 }
 
+/** A matched note, as both a moment in the score and a moment in the recording. */
+interface Anchor {
+    scoreId: string;
+    /** Where the score puts it, in quarter notes */
+    onset: number;
+    /** When it was played */
+    onsetMs: number;
+    pitch: number;
+}
+
+interface PlayedGroup {
+    id: string;
+    entries: { insertion: InsertedNote; span: NoteSpan }[];
+}
+
+interface UnplayedGroup {
+    id: string;
+    entries: { deletion: DeletedNote; note: ScoreNote }[];
+}
+
 /**
- * Group, anchor and read every disagreement.
+ * Group, pair, anchor and read every disagreement.
  *
- * The order is deliberate: the played notes are grouped into events first, then
- * each event is anchored to the score note it belongs to, and only then is it
- * read. Reading needs both - a group of three notes a semitone apart is a trill
- * only once you know which written note they surround.
+ * The order is deliberate. The two sides are grouped into events first, because
+ * only whole events can be compared. Then the events that are two halves of one
+ * substitution are paired off and taken out of both lists - a pair explains both
+ * halves, and leaving either behind would report the same moment twice, once as
+ * a note nobody played and once as a note nobody wrote. Only what is left is
+ * anchored and read: a group of three notes a semitone apart is a trill only once
+ * you know which written note they surround.
  */
 export function divergencesOf(
     input: DivergenceInput,
     options: DivergenceOptions = {}
 ): Divergence[] {
-    const { gapMs, simultaneousMs, figureNotes, hasRepeats } = { ...DEFAULTS, ...options };
+    const settings = { ...DEFAULTS, ...options };
 
     const spanById = new Map(input.spans.map((span) => [span.id, span]));
     const scoreById = new Map(input.scoreNotes.map((note) => [note.note, note]));
 
     // The time map: what each matched score note turned into when it was played.
-    const anchors: { scoreId: string; onsetMs: number; pitch: number }[] = [];
+    const anchors: Anchor[] = [];
     for (const match of input.matches) {
         const span = spanById.get(match.performanceId);
         const note = scoreById.get(match.scoreId);
         if (span && note) {
-            anchors.push({ scoreId: match.scoreId, onsetMs: span.onsetMs, pitch: note.pitch });
+            anchors.push({
+                scoreId: match.scoreId,
+                onset: note.onset,
+                onsetMs: span.onsetMs,
+                pitch: note.pitch,
+            });
         }
     }
     anchors.sort((a, b) => a.onsetMs - b.onsetMs);
@@ -148,79 +237,342 @@ export function divergencesOf(
     const firstMs = anchors.length > 0 ? anchors[0].onsetMs : Infinity;
     const lastMs = anchors.length > 0 ? anchors[anchors.length - 1].onsetMs : -Infinity;
 
+    const played = groupPlayed(input, spanById, anchors, settings.gapMs);
+    const unplayed = groupUnplayed(input, scoreById);
+
+    const { replaced, playedLeft, unplayedLeft } = pairReplacements(
+        played,
+        unplayed,
+        timeMapOf(anchors),
+        settings
+    );
+
+    const ctx: AddedContext = {
+        anchors,
+        firstMs,
+        lastMs,
+        simultaneousMs: settings.simultaneousMs,
+        figureNotes: settings.figureNotes,
+        hasRepeats: settings.hasRepeats,
+    };
+
+    const missingCtx = missingContextOf(input, scoreById, anchors.length > 0);
+
     return [
-        ...addedDivergences(input, {
-            spanById,
-            anchors,
-            firstMs,
-            lastMs,
-            gapMs,
-            simultaneousMs,
-            figureNotes,
-            hasRepeats,
-        }),
-        ...missingDivergences(input, { scoreById, anchors, firstMs, lastMs }),
+        ...replaced,
+        ...playedLeft.map((group) => readPlayed(group, input, ctx)),
+        ...unplayedLeft.map((group) => readUnplayed(group, missingCtx)),
     ];
 }
 
+/* -------------------------------------------------------------------------- */
+/* Grouping                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Played notes with no score note, gathered into events.
+ *
+ * A run with no real silence between its notes, all leaning on the same written
+ * note, is one event however many notes it holds.
+ */
+function groupPlayed(
+    input: DivergenceInput,
+    spanById: Map<string, NoteSpan>,
+    anchors: Anchor[],
+    gapMs: number
+): PlayedGroup[] {
+    const played = input.insertions
+        .map((insertion) => ({ insertion, span: spanById.get(insertion.performanceId) }))
+        .filter((entry): entry is { insertion: InsertedNote; span: NoteSpan } => !!entry.span)
+        .sort((a, b) => a.span.onsetMs - b.span.onsetMs);
+
+    const groups: PlayedGroup[] = [];
+    for (const entry of played) {
+        const current = groups[groups.length - 1];
+        const previous = current?.entries[current.entries.length - 1];
+
+        const sameEvent =
+            previous !== undefined &&
+            entry.span.onsetMs - previous.span.onsetMs <= gapMs &&
+            anchorFor(previous.span.onsetMs, anchors)?.scoreId ===
+                anchorFor(entry.span.onsetMs, anchors)?.scoreId;
+
+        if (sameEvent) current.entries.push(entry);
+        else groups.push({ id: `added-${groups.length}`, entries: [entry] });
+    }
+
+    return groups;
+}
+
+/**
+ * Written notes nothing answered to, gathered into events.
+ *
+ * A note whose own moment was otherwise played thinned a chord; one whose moment
+ * went unplayed altogether belongs with its neighbours in a passage.
+ */
+function groupUnplayed(
+    input: DivergenceInput,
+    scoreById: Map<string, ScoreNote>
+): UnplayedGroup[] {
+    const matchedOnsets = new Set<number>();
+    for (const match of input.matches) {
+        const note = scoreById.get(match.scoreId);
+        if (note) matchedOnsets.add(note.onset);
+    }
+
+    const unplayed = input.deletions
+        .map((deletion) => ({ deletion, note: scoreById.get(deletion.scoreId) }))
+        .filter((entry): entry is { deletion: DeletedNote; note: ScoreNote } => !!entry.note)
+        .sort((a, b) => a.note.onset - b.note.onset || a.note.pitch - b.note.pitch);
+
+    const groups: UnplayedGroup[] = [];
+    for (const entry of unplayed) {
+        const current = groups[groups.length - 1];
+        const previous = current?.entries[current.entries.length - 1];
+        const thinning = matchedOnsets.has(entry.note.onset);
+        const previousThinning = previous ? matchedOnsets.has(previous.note.onset) : false;
+
+        const sameEvent =
+            previous !== undefined &&
+            thinning === previousThinning &&
+            (thinning ? previous.note.onset === entry.note.onset : true);
+
+        if (sameEvent) current.entries.push(entry);
+        else groups.push({ id: `missing-${groups.length}`, entries: [entry] });
+    }
+
+    return groups;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pairing                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Matched notes as (score time, performed time), for reading between them. */
+function timeMapOf(anchors: Anchor[]): { onset: number; ms: number }[] {
+    return anchors
+        .map((anchor) => ({ onset: anchor.onset, ms: anchor.onsetMs }))
+        .sort((a, b) => a.onset - b.onset);
+}
+
+/**
+ * When a written note was due, in the recording's own time.
+ *
+ * Read off the matched notes on either side of it. A moment the matched notes do
+ * not bracket has no answer: the recording says nothing about it, and a guess
+ * extrapolated past the last note it does cover would be an invention.
+ */
+function expectedMs(
+    onset: number,
+    map: readonly { onset: number; ms: number }[]
+): number | undefined {
+    if (map.length === 0) return undefined;
+    if (onset < map[0].onset || onset > map[map.length - 1].onset) return undefined;
+
+    let low = 0;
+    let high = map.length - 1;
+    while (low < high - 1) {
+        const mid = (low + high) >> 1;
+        if (map[mid].onset <= onset) low = mid;
+        else high = mid;
+    }
+
+    const before = map[low];
+    const after = map[high];
+    if (after.onset === before.onset) return before.ms;
+
+    const t = (onset - before.onset) / (after.onset - before.onset);
+    return before.ms + t * (after.ms - before.ms);
+}
+
+/**
+ * Match up the halves of a substitution.
+ *
+ * A written note that went unplayed and a played note that answered to nothing
+ * are one event when the second falls where the first was due. Only single notes
+ * are paired: a run of played notes against a run of written ones is a passage
+ * played differently, which is a larger claim than this should make on its own.
+ *
+ * Pairs are taken cheapest first, and each half may be used once, so the closest
+ * reading wins and nothing is counted twice.
+ */
+function pairReplacements(
+    played: PlayedGroup[],
+    unplayed: UnplayedGroup[],
+    map: { onset: number; ms: number }[],
+    settings: typeof DEFAULTS
+): { replaced: ReplacedDivergence[]; playedLeft: PlayedGroup[]; unplayedLeft: UnplayedGroup[] } {
+    const candidates: {
+        playedIndex: number;
+        unplayedIndex: number;
+        lateMs: number;
+        semitones: number;
+        cost: number;
+    }[] = [];
+
+    const singles = played
+        .map((group, index) => ({ group, index }))
+        .filter((entry) => entry.group.entries.length === 1);
+
+    unplayed.forEach((group, unplayedIndex) => {
+        if (group.entries.length !== 1) return;
+
+        const written = group.entries[0].note;
+        const due = expectedMs(written.onset, map);
+        if (due === undefined) return;
+
+        for (const { group: candidate, index: playedIndex } of singles) {
+            const span = candidate.entries[0].span;
+            const lateMs = span.onsetMs - due;
+            const semitones = span.pitch - written.pitch;
+
+            if (Math.abs(lateMs) > settings.replacementMs) continue;
+            if (Math.abs(semitones) > settings.replacementSemitones) continue;
+
+            candidates.push({
+                playedIndex,
+                unplayedIndex,
+                lateMs,
+                semitones,
+                cost:
+                    Math.abs(lateMs) / settings.replacementMs +
+                    Math.abs(semitones) / (settings.replacementSemitones + 1),
+            });
+        }
+    });
+
+    candidates.sort((a, b) => a.cost - b.cost);
+
+    const usedPlayed = new Set<number>();
+    const usedUnplayed = new Set<number>();
+    const replaced: ReplacedDivergence[] = [];
+
+    for (const candidate of candidates) {
+        if (usedPlayed.has(candidate.playedIndex)) continue;
+        if (usedUnplayed.has(candidate.unplayedIndex)) continue;
+        usedPlayed.add(candidate.playedIndex);
+        usedUnplayed.add(candidate.unplayedIndex);
+
+        const { insertion, span } = played[candidate.playedIndex].entries[0];
+        const { deletion, note } = unplayed[candidate.unplayedIndex].entries[0];
+        const { reading, because } = readReplaced(candidate.semitones, candidate.lateMs);
+
+        replaced.push({
+            kind: "replaced",
+            id: `replaced-${unplayed[candidate.unplayedIndex].id}`,
+            scoreId: note.note,
+            perfId: span.id,
+            pitches: [note.pitch, span.pitch],
+            reading,
+            because,
+            onset: note.onset,
+            onsetMs: span.onsetMs,
+            lateMs: candidate.lateMs,
+            confidence: Math.min(insertion.confidence, deletion.confidence),
+        });
+    }
+
+    replaced.sort((a, b) => a.onsetMs - b.onsetMs);
+
+    return {
+        replaced,
+        playedLeft: played.filter((_, index) => !usedPlayed.has(index)),
+        unplayedLeft: unplayed.filter((_, index) => !usedUnplayed.has(index)),
+    };
+}
+
+function readReplaced(
+    semitones: number,
+    lateMs: number
+): { reading: ReplacedReading; because: string } {
+    const where = `where the score writes it${
+        Math.abs(lateMs) < 20 ? "" : `, ${Math.abs(lateMs).toFixed(0)} ms ${lateMs > 0 ? "late" : "early"}`
+    }`;
+
+    if (semitones === 0) {
+        return {
+            reading: "unmatched-pair",
+            because:
+                `The written note itself, played ${where}, which the aligner did not ` +
+                `pair with it. Nothing was added and nothing left out; the alignment ` +
+                `simply has a hole here.`,
+        };
+    }
+
+    if (semitones % 12 === 0) {
+        const octaves = Math.abs(semitones) / 12;
+        return {
+            reading: "octave-displaced",
+            because:
+                `The written note taken ${octaves === 1 ? "an octave" : `${octaves} octaves`} ` +
+                `${semitones > 0 ? "higher" : "lower"}, played ${where}.`,
+        };
+    }
+
+    if (Math.abs(semitones) <= 2) {
+        return {
+            reading: "neighbour-slip",
+            because:
+                `${intervalWords(semitones)} the written note, played ${where}. ` +
+                `A neighbour struck instead of the note itself is the commonest slip there is.`,
+        };
+    }
+
+    return {
+        reading: "different-note",
+        because: `${intervalWords(semitones)} the written note, played ${where}.`,
+    };
+}
+
+/** How far off a substitute was, said in words rather than in semitones. */
+function intervalWords(semitones: number): string {
+    const distance = Math.abs(semitones);
+    const size =
+        distance === 1
+            ? "A semitone"
+            : distance === 2
+              ? "A tone"
+              : `${distance} semitones`;
+    return `${size} ${semitones > 0 ? "above" : "below"}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reading what is left                                                        */
+/* -------------------------------------------------------------------------- */
+
 interface AddedContext {
-    spanById: Map<string, NoteSpan>;
-    anchors: { scoreId: string; onsetMs: number; pitch: number }[];
+    anchors: Anchor[];
     firstMs: number;
     lastMs: number;
-    gapMs: number;
     simultaneousMs: number;
     figureNotes: number;
     hasRepeats: boolean;
 }
 
-function addedDivergences(input: DivergenceInput, ctx: AddedContext): AddedDivergence[] {
-    const played = input.insertions
-        .map((insertion) => ({
-            insertion,
-            span: ctx.spanById.get(insertion.performanceId),
-        }))
-        .filter((entry): entry is { insertion: InsertedNote; span: NoteSpan } => !!entry.span)
-        .sort((a, b) => a.span.onsetMs - b.span.onsetMs);
+function readPlayed(
+    group: PlayedGroup,
+    input: DivergenceInput,
+    ctx: AddedContext
+): AddedDivergence {
+    const spans = group.entries.map((entry) => entry.span);
+    const onsetMs = spans[0].onsetMs;
+    const anchor = anchorFor(onsetMs, ctx.anchors);
+    const signs = anchor ? input.signs.get(anchor.scoreId) ?? [] : [];
 
-    // Group first: a run of played notes with no real silence between them, all
-    // leaning on the same written note, is one event however many notes it holds.
-    const groups: { insertion: InsertedNote; span: NoteSpan }[][] = [];
-    for (const entry of played) {
-        const current = groups[groups.length - 1];
-        const previous = current?.[current.length - 1];
+    const { reading, because } = readAdded(spans, anchor, signs, ctx);
 
-        const sameEvent =
-            previous !== undefined &&
-            entry.span.onsetMs - previous.span.onsetMs <= ctx.gapMs &&
-            anchorFor(previous.span.onsetMs, ctx.anchors)?.scoreId ===
-                anchorFor(entry.span.onsetMs, ctx.anchors)?.scoreId;
-
-        if (sameEvent) current.push(entry);
-        else groups.push([entry]);
-    }
-
-    return groups.map((group, index) => {
-        const spans = group.map((entry) => entry.span);
-        const onsetMs = spans[0].onsetMs;
-        const anchor = anchorFor(onsetMs, ctx.anchors);
-        const signs = anchor ? input.signs.get(anchor.scoreId) ?? [] : [];
-
-        const { reading, because } = readAdded(spans, anchor, signs, ctx);
-
-        return {
-            kind: "added" as const,
-            id: `added-${index}`,
-            perfIds: spans.map((span) => span.id),
-            pitches: spans.map((span) => span.pitch),
-            anchorId: anchor?.scoreId ?? null,
-            signs,
-            reading,
-            because,
-            onsetMs,
-            confidence: Math.min(...group.map((entry) => entry.insertion.confidence)),
-        };
-    });
+    return {
+        kind: "added",
+        id: group.id,
+        perfIds: spans.map((span) => span.id),
+        pitches: spans.map((span) => span.pitch),
+        anchorId: anchor?.scoreId ?? null,
+        signs,
+        reading,
+        because,
+        onsetMs,
+        confidence: Math.min(...group.entries.map((entry) => entry.insertion.confidence)),
+    };
 }
 
 /**
@@ -231,13 +583,10 @@ function addedDivergences(input: DivergenceInput, ctx: AddedContext): AddedDiver
  * both in the score and move it; guessing between the two on timing alone is
  * less honest than showing where the sound actually sits.
  */
-function anchorFor(
-    onsetMs: number,
-    anchors: { scoreId: string; onsetMs: number; pitch: number }[]
-): { scoreId: string; onsetMs: number; pitch: number } | undefined {
+function anchorFor(onsetMs: number, anchors: Anchor[]): Anchor | undefined {
     let low = 0;
     let high = anchors.length - 1;
-    let found: { scoreId: string; onsetMs: number; pitch: number } | undefined;
+    let found: Anchor | undefined;
 
     while (low <= high) {
         const mid = (low + high) >> 1;
@@ -254,7 +603,7 @@ function anchorFor(
 
 function readAdded(
     spans: NoteSpan[],
-    anchor: { scoreId: string; onsetMs: number; pitch: number } | undefined,
+    anchor: Anchor | undefined,
     signs: OrnamentSign[],
     ctx: AddedContext
 ): { reading: AddedReading; because: string } {
@@ -321,107 +670,72 @@ function readAdded(
 }
 
 /** Whether a figure stays within a few semitones of the note it surrounds. */
-function nearAnchor(
-    spans: NoteSpan[],
-    anchor: { scoreId: string; onsetMs: number; pitch: number }
-): boolean {
+function nearAnchor(spans: NoteSpan[], anchor: Anchor): boolean {
     return spans.every((span) => Math.abs(span.pitch - anchor.pitch) <= 4);
 }
 
 interface MissingContext {
-    scoreById: Map<string, ScoreNote>;
-    anchors: { scoreId: string; onsetMs: number; pitch: number }[];
-    firstMs: number;
-    lastMs: number;
+    /** Score moments the recording answered to at all */
+    matchedOnsets: Set<number>;
+    /** Whether the recording covers a moment, judged from the notes around it */
+    coveredFrom: number;
+    coveredTo: number;
 }
 
-function missingDivergences(input: DivergenceInput, ctx: MissingContext): MissingDivergence[] {
+function missingContextOf(
+    input: DivergenceInput,
+    scoreById: Map<string, ScoreNote>,
+    covered: boolean
+): MissingContext {
     const matchedOnsets = new Set<number>();
+    let coveredFrom = Infinity;
+    let coveredTo = -Infinity;
+
     for (const match of input.matches) {
-        const note = ctx.scoreById.get(match.scoreId);
-        if (note) matchedOnsets.add(note.onset);
+        const note = scoreById.get(match.scoreId);
+        if (!note) continue;
+        matchedOnsets.add(note.onset);
+        if (note.onset < coveredFrom) coveredFrom = note.onset;
+        if (note.onset > coveredTo) coveredTo = note.onset;
     }
 
-    const unplayed = input.deletions
-        .map((deletion) => ({ deletion, note: ctx.scoreById.get(deletion.scoreId) }))
-        .filter((entry): entry is { deletion: DeletedNote; note: ScoreNote } => !!entry.note)
-        .sort((a, b) => a.note.onset - b.note.onset || a.note.pitch - b.note.pitch);
-
-    // A note whose own moment was otherwise played thinned a chord; one whose
-    // moment went unplayed altogether belongs with its neighbours in a passage.
-    const groups: { deletion: DeletedNote; note: ScoreNote }[][] = [];
-    for (const entry of unplayed) {
-        const current = groups[groups.length - 1];
-        const previous = current?.[current.length - 1];
-        const thinning = matchedOnsets.has(entry.note.onset);
-        const previousThinning = previous ? matchedOnsets.has(previous.note.onset) : false;
-
-        const sameEvent =
-            previous !== undefined &&
-            thinning === previousThinning &&
-            (thinning ? previous.note.onset === entry.note.onset : true);
-
-        if (sameEvent) current.push(entry);
-        else groups.push([entry]);
-    }
-
-    // Whether the recording covers a moment at all, judged from the written notes
-    // around it that were played.
-    const coveredFrom = ctx.anchors.length > 0 ? firstMatchedOnset(input, ctx) : Infinity;
-    const coveredTo = ctx.anchors.length > 0 ? lastMatchedOnset(input, ctx) : -Infinity;
-
-    return groups.map((group, index) => {
-        const notes = group.map((entry) => entry.note);
-        const onset = notes[0].onset;
-        const thinning = matchedOnsets.has(onset);
-
-        let reading: MissingReading;
-        let because: string;
-
-        if (onset < coveredFrom || onset > coveredTo) {
-            reading = "outside";
-            because =
-                "Beyond where the recording reaches - the performer did not leave this out, " +
-                "the recording does not cover it.";
-        } else if (thinning) {
-            reading = "thinned-chord";
-            because = `Other notes sounding at this moment were played; ${notes.length} ${
-                notes.length === 1 ? "was" : "were"
-            } not.`;
-        } else if (notes.length > 1) {
-            reading = "omitted-passage";
-            because = `${notes.length} notes in a row that the recording passes over.`;
-        } else {
-            reading = "omitted-note";
-            because = "One written note that nothing in the recording answers to.";
-        }
-
-        return {
-            kind: "missing" as const,
-            id: `missing-${index}`,
-            scoreIds: notes.map((note) => note.note),
-            reading,
-            because,
-            onset,
-            confidence: Math.min(...group.map((entry) => entry.deletion.confidence)),
-        };
-    });
+    return covered
+        ? { matchedOnsets, coveredFrom, coveredTo }
+        : { matchedOnsets, coveredFrom: Infinity, coveredTo: -Infinity };
 }
 
-function firstMatchedOnset(input: DivergenceInput, ctx: MissingContext): number {
-    let earliest = Infinity;
-    for (const match of input.matches) {
-        const note = ctx.scoreById.get(match.scoreId);
-        if (note && note.onset < earliest) earliest = note.onset;
-    }
-    return earliest;
-}
+function readUnplayed(group: UnplayedGroup, ctx: MissingContext): MissingDivergence {
+    const notes = group.entries.map((entry) => entry.note);
+    const onset = notes[0].onset;
 
-function lastMatchedOnset(input: DivergenceInput, ctx: MissingContext): number {
-    let latest = -Infinity;
-    for (const match of input.matches) {
-        const note = ctx.scoreById.get(match.scoreId);
-        if (note && note.onset > latest) latest = note.onset;
+    let reading: MissingReading;
+    let because: string;
+
+    if (onset < ctx.coveredFrom || onset > ctx.coveredTo) {
+        reading = "outside";
+        because =
+            "Beyond where the recording reaches - the performer did not leave this out, " +
+            "the recording does not cover it.";
+    } else if (ctx.matchedOnsets.has(onset)) {
+        reading = "thinned-chord";
+        because = `Other notes sounding at this moment were played; ${notes.length} ${
+            notes.length === 1 ? "was" : "were"
+        } not.`;
+    } else if (notes.length > 1) {
+        reading = "omitted-passage";
+        because = `${notes.length} notes in a row that the recording passes over.`;
+    } else {
+        reading = "omitted-note";
+        because = "One written note that nothing in the recording answers to.";
     }
-    return latest;
+
+    return {
+        kind: "missing",
+        id: group.id,
+        scoreIds: notes.map((note) => note.note),
+        reading,
+        because,
+        onset,
+        confidence: Math.min(...group.entries.map((entry) => entry.deletion.confidence)),
+    };
 }

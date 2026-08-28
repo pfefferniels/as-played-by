@@ -79,6 +79,13 @@ export const DivergencePopover = ({
                         {divergence.pitches.slice(0, 12).map(pitchName).join(" ")}
                         {divergence.pitches.length > 12 ? " …" : ""}
                     </>
+                ) : divergence.kind === "replaced" ? (
+                    // Both halves, in the order the reader reads them: what stands
+                    // in the score, and what came out of the instrument instead
+                    <>
+                        {timestamp(divergence.onsetMs)} · {pitchName(divergence.pitches[0])}{" "}
+                        written, {pitchName(divergence.pitches[1])} played
+                    </>
                 ) : (
                     <>
                         {divergence.scoreIds.length} written note

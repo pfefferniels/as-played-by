@@ -23,9 +23,9 @@ import { PerformedScore } from "../verovio/PerformedScore";
 import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
 import type { ExtraNote } from "../verovio/extraNotes";
 import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
-import { divergencesOf } from "../alignment/divergences";
+import { divergencesOf, type Divergence } from "../alignment/divergences";
 import { ornamentSignsOf } from "../mei/ornamentSigns";
-import { addOrnamentSign, addPlayedNotes, markUnplayed } from "../mei/editScore";
+import { addOrnamentSign, addPlayedNotes, markUnplayed, replaceWithPlayed } from "../mei/editScore";
 import { DivergencePopover } from "./DivergencePopover";
 import {
     CERTAINTIES,
@@ -53,6 +53,8 @@ const UNPLAYED_COLOUR = "#c9ced6";
 /** The played notes with no note in the score, drawn as crosses */
 const EXTRA_COLOUR = "#b45309";
 const SELECTED_COLOUR = "#dc2626";
+/** A written note the recording played as something else: sounded, but not as written */
+const REPLACED_COLOUR = "#7c3aed";
 
 const scoreStyles = {
     ".mlign-score .mlign-matched, .mlign-score .mlign-matched *": {
@@ -62,6 +64,10 @@ const scoreStyles = {
     ".mlign-score .mlign-unplayed, .mlign-score .mlign-unplayed *": {
         fill: `${UNPLAYED_COLOUR} !important`,
         stroke: `${UNPLAYED_COLOUR} !important`,
+    },
+    ".mlign-score .mlign-replaced, .mlign-score .mlign-replaced *": {
+        fill: `${REPLACED_COLOUR} !important`,
+        stroke: `${REPLACED_COLOUR} !important`,
     },
     ".mlign-score [data-perf-unaligned], .mlign-score [data-perf-unaligned] *": {
         fill: `${UNPLAYED_COLOUR} !important`,
@@ -465,6 +471,7 @@ export default function MLignApp() {
                         id,
                         {
                             reading: resolution.reading,
+                            action: resolution.action,
                             resp: attribution.resp || undefined,
                             certainty: attribution.certainty,
                         },
@@ -505,18 +512,29 @@ export default function MLignApp() {
                 .map((pair) => pair.score_id)
                 .filter((id) => !hidden.has(id))
         );
-        const unplayed = new Set([
-            ...(result?.deletions ?? []).map((deletion) => deletion.scoreId),
-            // A match the reader asked not to see stands in the score as unplayed
-            ...(result?.matches ?? [])
-                .filter((match) => match.confidence < minConfidence)
-                .map((match) => match.scoreId),
-        ]);
+        // A written note that was played as another note is not unplayed: it
+        // sounded, and the score shows it in its own colour rather than as one
+        // of the notes the recording never reached.
+        const replaced = new Map(
+            divergences
+                .filter((divergence) => divergence.kind === "replaced")
+                .map((divergence) => [divergence.scoreId, divergence.id])
+        );
 
-        // Which divergence each unplayed note belongs to, so that clicking one
-        // asks about it. The crosses carry this already; a grey notehead is a
-        // note verovio drew, so it has to be told here.
-        const divergenceOfNote = new Map<string, string>();
+        const unplayed = new Set(
+            [
+                ...(result?.deletions ?? []).map((deletion) => deletion.scoreId),
+                // A match the reader asked not to see stands in the score as unplayed
+                ...(result?.matches ?? [])
+                    .filter((match) => match.confidence < minConfidence)
+                    .map((match) => match.scoreId),
+            ].filter((id) => !replaced.has(id))
+        );
+
+        // Which divergence each note the recording disagreed about belongs to, so
+        // that clicking one asks about it. The crosses carry this already; a
+        // notehead is something verovio drew, so it has to be told here.
+        const divergenceOfNote = new Map<string, string>(replaced);
         for (const divergence of divergences) {
             if (divergence.kind !== "missing") continue;
             for (const id of divergence.scoreIds) divergenceOfNote.set(id, divergence.id);
@@ -526,9 +544,14 @@ export default function MLignApp() {
 
         const paint = () => {
             for (const element of root.querySelectorAll(
-                ".mlign-matched, .mlign-unplayed, .mlign-selected"
+                ".mlign-matched, .mlign-unplayed, .mlign-replaced, .mlign-selected"
             )) {
-                element.classList.remove("mlign-matched", "mlign-unplayed", "mlign-selected");
+                element.classList.remove(
+                    "mlign-matched",
+                    "mlign-unplayed",
+                    "mlign-replaced",
+                    "mlign-selected"
+                );
             }
             const find = (id: string) =>
                 root.querySelector(
@@ -546,6 +569,14 @@ export default function MLignApp() {
                     (element as SVGElement).style.cursor = "pointer";
                 }
             }
+            for (const [id, divergenceId] of replaced) {
+                const element = find(id);
+                if (!element) continue;
+
+                element.classList.add("mlign-replaced");
+                element.setAttribute("data-divergence", divergenceId);
+                (element as SVGElement).style.cursor = "pointer";
+            }
 
             // What the reader currently has open, so the popover and the music
             // agree about which notes are being talked about
@@ -555,7 +586,9 @@ export default function MLignApp() {
                         ? chosen.anchorId
                             ? [chosen.anchorId]
                             : []
-                        : chosen.scoreIds;
+                        : chosen.kind === "replaced"
+                          ? [chosen.scoreId]
+                          : chosen.scoreIds;
                 for (const id of ids) find(id)?.classList.add("mlign-selected");
 
                 for (const cross of root.querySelectorAll(
@@ -577,28 +610,41 @@ export default function MLignApp() {
         return () => observer.disconnect();
     }, [performed, result, minConfidence, hidden, divergences, selected]);
 
-    /** The extra notes to draw, each carrying the divergence a click selects */
+    /**
+     * The extra notes to draw, each carrying the divergence a click selects.
+     *
+     * A substitution draws one too, at the pitch actually struck, so that the
+     * written note and what was played in its place stand one above the other at
+     * the same moment. Where the two are the same pitch there is nothing to draw:
+     * the notehead already sits exactly where the cross would go, and the note
+     * itself is the whole story.
+     */
     const extraNotes = useMemo<ExtraNote[]>(() => {
         const byId = new Map(spans.map((span) => [span.id, span]));
+        const cross = (divergence: Divergence, perfId: string): ExtraNote[] => {
+            const span = byId.get(perfId);
+            if (!span) return [];
+            return [
+                {
+                    id: span.id,
+                    divergenceId: divergence.id,
+                    onsetMs: span.onsetMs,
+                    offsetMs: span.offsetMs,
+                    pitch: span.pitch,
+                    resolved: resolutions.has(divergence.id),
+                },
+            ];
+        };
 
-        return divergences.flatMap((divergence) =>
-            divergence.kind === "added"
-                ? divergence.perfIds.flatMap((perfId) => {
-                      const span = byId.get(perfId);
-                      if (!span) return [];
-                      return [
-                          {
-                              id: span.id,
-                              divergenceId: divergence.id,
-                              onsetMs: span.onsetMs,
-                              offsetMs: span.offsetMs,
-                              pitch: span.pitch,
-                              resolved: resolutions.has(divergence.id),
-                          },
-                      ];
-                  })
-                : []
-        );
+        return divergences.flatMap((divergence) => {
+            if (divergence.kind === "added") {
+                return divergence.perfIds.flatMap((perfId) => cross(divergence, perfId));
+            }
+            if (divergence.kind === "replaced" && divergence.reading !== "unmatched-pair") {
+                return cross(divergence, divergence.perfId);
+            }
+            return [];
+        });
     }, [divergences, spans, resolutions]);
 
     /**
@@ -623,6 +669,18 @@ export default function MLignApp() {
         setSelected(id);
         setAnchorEl(element);
     };
+
+    /**
+     * How many disagreements turned out to be one note played as another.
+     *
+     * Each of them is a deletion and an insertion the aligner reported apart, so
+     * the two headline figures have to lose one apiece for every pair, or the
+     * same event is counted twice under two names.
+     */
+    const replacedCount = useMemo(
+        () => divergences.filter((divergence) => divergence.kind === "replaced").length,
+        [divergences]
+    );
 
     /** Those the reader has not settled yet, in the order they sound. */
     const undecided = useMemo(
@@ -658,7 +716,7 @@ export default function MLignApp() {
     /**
      * Carry out the decisions that change the notation.
      *
-     * Only these three do: everything else is a fact about the recording, which
+     * Only these four do: everything else is a fact about the recording, which
      * is already written into it. The edited score replaces the one on the page,
      * so the next alignment sees the notes just added - which is what makes a
      * written-in note match rather than turn up as an addition all over again.
@@ -695,6 +753,11 @@ export default function MLignApp() {
                 }
             } else if (divergence.kind === "missing" && action === "mark-simplification") {
                 if (markUnplayed(doc, divergence.scoreIds, who)) changed++;
+            } else if (divergence.kind === "replaced" && action === "write-variant") {
+                const played = byId.get(divergence.perfId);
+                if (played && replaceWithPlayed(doc, divergence.scoreId, played, tonic, who)) {
+                    changed++;
+                }
             }
         }
 
@@ -861,8 +924,21 @@ export default function MLignApp() {
                                 label="notes matched"
                                 colour={MATCHED_COLOUR}
                             />
-                            <Count value={result.deletions.length} label="notes not played" />
-                            <Count value={result.insertions.length} label="notes not in the score" />
+                            <Count
+                                value={result.deletions.length - replacedCount}
+                                label="notes not played"
+                            />
+                            <Count
+                                value={result.insertions.length - replacedCount}
+                                label="notes not in the score"
+                            />
+                            {replacedCount > 0 && (
+                                <Count
+                                    value={replacedCount}
+                                    label="notes played differently"
+                                    colour={REPLACED_COLOUR}
+                                />
+                            )}
                         </Stack>
 
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
@@ -879,6 +955,17 @@ export default function MLignApp() {
                             reaches it as extra. Those are drawn as crosses where they were
                             played, and sorted out below.
                         </Typography>
+                        {replacedCount > 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                                A note <strong>played differently</strong> is one of each: the
+                                aligner found a written note nothing answered to and a played note
+                                belonging to nothing, at the same moment, and they are the same
+                                event — the performer played something else there. Counting them
+                                twice would say a note was dropped and another added when one note
+                                simply came out differently, so they are taken out of both figures
+                                above.
+                            </Typography>
+                        )}
 
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
                             {result.stats.scoreNotes} notes in the score ·{" "}
@@ -930,6 +1017,13 @@ export default function MLignApp() {
                                 variant="outlined"
                                 sx={{ color: EXTRA_COLOUR, borderColor: EXTRA_COLOUR }}
                             />
+                            {replacedCount > 0 && (
+                                <Chip
+                                    size="small"
+                                    label="played differently"
+                                    sx={{ backgroundColor: REPLACED_COLOUR, color: "#ffffff" }}
+                                />
+                            )}
 
                             <Box sx={{ flexGrow: 1 }} />
 
