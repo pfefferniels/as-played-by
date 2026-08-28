@@ -1,4 +1,4 @@
-import { AnySpan } from "./MidiSpans";
+import { AnySpan } from "../performance/midiSpans";
 
 export const insertRecording = (newMEI: Document, source?: string) => {
     let recording = source

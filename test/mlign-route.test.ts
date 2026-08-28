@@ -15,11 +15,11 @@ import {
   toMatches,
   unshowableScoreIds,
   type MatchedNote,
-} from '../src/mlign'
-import type { ScoreNote } from '../src/NaiveAligner'
-import type { NoteSpan } from '../src/MidiSpans'
+} from '../src/alignment/mlign'
+import type { ScoreNote } from '../src/score/scoreNotes'
+import type { NoteSpan } from '../src/performance/midiSpans'
 // Types only: importing the module itself would pull onnxruntime-web into the run
-import type { EncoderOutput, MlignSession, ModelFeeds } from '../src/mlign/session'
+import type { EncoderOutput, MlignSession, ModelFeeds } from '../src/alignment/mlign/session'
 
 const mei = readFileSync(join(__dirname, '..', 'public', 'transcription.mei'), 'utf-8')
 

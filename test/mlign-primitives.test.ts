@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { sumF32, interp, uniqueWithIndex, monotoneSubset, firstArgmax } from '../src/mlign/decode'
+import { sumF32, interp, uniqueWithIndex, monotoneSubset, firstArgmax } from '../src/alignment/mlign/decode'
 
 /**
  * NumPy-parity tests for the decode's numeric primitives.

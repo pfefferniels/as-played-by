@@ -3,10 +3,10 @@ import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import type { MidiFile } from 'midifile-ts'
-import { applyAlignment } from '../src/applyAlignment'
-import { parseRecordings } from '../src/parseRecordings'
-import { buildMidiFile } from '../src/buildMidiFile'
-import { asSpans } from '../src/MidiSpans'
+import { applyAlignment } from '../src/alignment/applyAlignment'
+import { parseRecordings } from '../src/mei/parseRecordings'
+import { buildMidiFile } from '../src/performance/buildMidiFile'
+import { asSpans } from '../src/performance/midiSpans'
 
 const mei = readFileSync(join(__dirname, '..', 'public', 'transcription.mei'), 'utf-8')
 

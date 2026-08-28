@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
-import { AnySpan, NoteSpan } from "./MidiSpans";
+import { AnySpan, NoteSpan } from "../performance/midiSpans";
 import { usePiano } from "react-pianosound";
-import { spellMidi } from "./spellPitch";
+import { spellMidi } from "../performance/spellPitch";
 // import { usePiano } from "react-pianosound"
 
 /*

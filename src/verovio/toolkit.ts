@@ -33,6 +33,14 @@ export interface PerformanceOptions {
 export type ScoreOptions = VerovioOptions & PerformanceOptions;
 
 /**
+ * The MEI units given to one second of performed time.
+ *
+ * Every view that offers a zoom starts here, so that a score opens at the same
+ * size everywhere and the slider only ever moves away from one known default.
+ */
+export const DEFAULT_PERFORMANCE_SCALE = 16;
+
+/**
  * How a performance is rendered unless a caller says otherwise. Everything a
  * component wants to vary is passed as an override of these, so that the option
  * names stay the ones verovio itself uses.
@@ -59,7 +67,7 @@ export const defaultOptions: ScoreOptions = {
     ],
     appXPathQuery: ['./rdg[contains(@source, "performance")]'],
     performanceAlignment: true,
-    performanceScale: 16,
+    performanceScale: DEFAULT_PERFORMANCE_SCALE,
     performanceSystemDuration: 10,
     performanceUnmatched: "mark",
     performanceVelocityOpacity: true,

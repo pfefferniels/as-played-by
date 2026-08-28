@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { getNotesFromMEI, type ScoreNote } from '../src/NaiveAligner'
+import { getNotesFromMEI, type ScoreNote } from '../src/score/scoreNotes'
 
 const load = (path: string) => readFileSync(join(__dirname, path), 'utf-8')
 const byId = (notes: ScoreNote[]) => new Map(notes.map((note) => [note.note, note]))

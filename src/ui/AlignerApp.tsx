@@ -1,27 +1,27 @@
 import { MidiFile, read } from "midifile-ts";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnySpan, asSpans } from "./MidiSpans";
+import { AnySpan, asSpans } from "../performance/midiSpans";
 import { MidiViewer } from "./MidiViewer";
 import { Accordion, AccordionDetails, AccordionSummary, Box, Button, FormControl, IconButton, Slider, Stack, Tooltip, Typography } from "@mui/material"
 import { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { PerformedScore } from "./verovio/PerformedScore";
-import { pixelsPerSecond } from "./verovio/toolkit";
+import { PerformedScore } from "../verovio/PerformedScore";
+import { DEFAULT_PERFORMANCE_SCALE, pixelsPerSecond } from "../verovio/toolkit";
 import { CodeEditor } from "./CodeEditor";
 import { Download, ExpandMore, Info, PlayCircle, StopCircle } from "@mui/icons-material";
 import InfoDialog from "./Info";
-import { getNotesFromMEI, Match, naiveAligner } from "./NaiveAligner";
-import { applyAlignment } from "./applyAlignment";
+import { getNotesFromMEI } from "../score/scoreNotes";
+import { naiveAligner } from "../alignment/naiveAligner";
+import type { Match } from "../alignment/types";
+import { applyAlignment } from "../alignment/applyAlignment";
+import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
 import { usePiano } from "react-pianosound";
-
-/** MEI units given to one second of performed time */
-const DEFAULT_SCALE = 16;
 
 export const App = () => {
     const [mei, setMEI] = useState<string>()
     const [midi, setMIDI] = useState<MidiFile>()
     const [midiFileName, setMidiFileName] = useState<string>('')
     const [pairs, setPairs] = useState<Match[]>([])
-    const [scale, setScale] = useState<number>(DEFAULT_SCALE);
+    const [scale, setScale] = useState<number>(DEFAULT_PERFORMANCE_SCALE);
     const [showHelp, setShowHelp] = useState(false)
     const [playing, setPlaying] = useState(false)
     const [selectedSpans, setSelectedSpans] = useState<AnySpan[]>([])
@@ -40,38 +40,19 @@ export const App = () => {
         }
     }, [])
 
-    const handleMEI = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!event.target.files || !event.target.files.length) return;
-
-        const file = event.target.files[0];
+    const handleMEI = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = chosenFile(event);
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            if (!e.target || !e.target.result) return;
-
-            setMEI(e.target.result as string);
-        };
-
-        reader.readAsText(file);
+        setMEI(await readAsText(file));
     };
 
-    const handleMIDI = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (!event.target.files || !event.target.files.length) return;
-
-        const file = event.target.files[0];
+    const handleMIDI = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = chosenFile(event);
         if (!file) return;
 
         setMidiFileName(file.name)
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            if (!e.target) return;
-            const binaryData = e.target.result;
-            const newMIDI = read(binaryData as ArrayBuffer)
-            setMIDI(newMIDI);
-        };
-
-        reader.readAsArrayBuffer(file);
+        setMIDI(read(await readAsArrayBuffer(file)));
     };
 
     useEffect(() => {

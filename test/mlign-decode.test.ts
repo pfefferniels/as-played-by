@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { decodeTraced, dualSoftmax } from '../src/mlign/decode'
-import type { MlignRow, SimBundle, ScoreRow, PerfRow } from '../src/mlign/types'
+import { decodeTraced, dualSoftmax } from '../src/alignment/mlign/decode'
+import type { MlignRow, SimBundle, ScoreRow, PerfRow } from '../src/alignment/mlign/types'
 
 /**
  * Golden-fixture parity for the decode port.

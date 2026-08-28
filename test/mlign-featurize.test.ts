@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { N_CONT, featurizeWindow, tablesToRow } from '../src/mlign/featurize'
-import type { MlignRow, PerfNote, PerfRow, ScoreNote, ScoreRow, Window } from '../src/mlign/types'
+import { N_CONT, featurizeWindow, tablesToRow } from '../src/alignment/mlign/featurize'
+import type { MlignRow, PerfNote, PerfRow, ScoreNote, ScoreRow, Window } from '../src/alignment/mlign/types'
 
 /**
  * Golden-fixture parity for the featurize port.

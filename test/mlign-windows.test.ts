@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { baselinePairs, coarseWindows, planWindows } from '../src/mlign/windows'
-import type { WindowOptions } from '../src/mlign/windows'
+import { baselinePairs, coarseWindows, planWindows } from '../src/alignment/mlign/windows'
+import type { WindowOptions } from '../src/alignment/mlign/windows'
 import {
   DTW_GAP_BASELINE,
   MARGIN_SEC,
@@ -13,8 +13,8 @@ import {
   SCORE_CLUSTER_EPS,
   WIN_SCORE,
   WIN_STRIDE,
-} from '../src/mlign/types'
-import type { MlignRow, PerfRow, ScoreRow } from '../src/mlign/types'
+} from '../src/alignment/mlign/types'
+import type { MlignRow, PerfRow, ScoreRow } from '../src/alignment/mlign/types'
 
 /**
  * Golden-fixture parity for the windowing port.

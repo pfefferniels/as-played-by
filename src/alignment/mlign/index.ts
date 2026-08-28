@@ -22,8 +22,9 @@ import { planWindows } from "./windows";
 import { MARKER_PITCH, MAX_SINGLE_TOKENS } from "./types";
 import type { PerfNote, ScoreNote as ModelNote, SimBundle } from "./types";
 import type { MlignSession } from "./session";
-import type { Match, ScoreNote } from "../NaiveAligner";
-import type { NoteSpan } from "../MidiSpans";
+import type { Match } from "../types";
+import type { ScoreNote } from "../../score/scoreNotes";
+import type { NoteSpan } from "../../performance/midiSpans";
 
 /**
  * The largest window the WASM build can forward.

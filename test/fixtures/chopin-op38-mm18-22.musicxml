@@ -242,6 +242,7 @@
         <duration>8</duration>
         <voice>1</voice>
         <type>eighth</type>
+        <accidental>natural</accidental>
         <stem>up</stem>
         <staff>1</staff>
       </note>
@@ -253,6 +254,7 @@
         </pitch>
         <voice>1</voice>
 	<type>eighth</type>
+        <accidental>natural</accidental>
 	<stem>up</stem>
         <staff>1</staff>
       </note>
@@ -356,6 +358,7 @@
         <duration>8</duration>
         <voice>3</voice>
         <type>eighth</type>
+        <accidental>natural</accidental>
         <stem>down</stem>
         <staff>1</staff>
       </note>
@@ -762,6 +765,7 @@
         <duration>8</duration>
         <voice>1</voice>
         <type>eighth</type>
+        <accidental>natural</accidental>
         <stem>up</stem>
         <staff>1</staff>
       </note>

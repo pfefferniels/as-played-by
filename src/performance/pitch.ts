@@ -25,3 +25,15 @@ export function midiPitch(
 
     return (octave + 1) * 12 + pitchClass + (accid ? (ACCIDENTAL[accid] ?? 0) : 0);
 }
+
+/**
+ * One name per pitch class, for naming a MIDI pitch that has no notation behind
+ * it - a performed note nothing in the score was matched to. Where the score
+ * does say how a note is written, ./spellPitch reads that instead.
+ */
+const PITCH_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+
+/** A MIDI pitch as a reader would say it, e.g. 60 as "C4" */
+export function pitchName(pitch: number): string {
+    return `${PITCH_NAMES[((pitch % 12) + 12) % 12]}${Math.floor(pitch / 12) - 1}`;
+}

@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import CodeMirror, { EditorSelection, ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { xml } from '@codemirror/lang-xml';
 import { Button, Divider, Stack } from '@mui/material';
-import { loadVerovio } from './verovio/toolkit';
+import { loadVerovio } from "../verovio/toolkit";
 import { OpenInFull, Save } from '@mui/icons-material';
 import { MenuItem } from '@mui/material';
 import DropdownButton from './DropdownButton';
 import { CreateReading } from './CreateReading';
-import { AnySpan } from './MidiSpans';
+import { AnySpan } from "../performance/midiSpans";
 
 interface CodeEditorProps {
     mei: string;

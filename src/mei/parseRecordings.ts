@@ -1,5 +1,5 @@
-import { NoteSpan } from "./MidiSpans";
-import { midiPitch } from "./pitch";
+import { NoteSpan } from "../performance/midiSpans";
+import { midiPitch } from "../performance/pitch";
 
 export interface PedalEvent {
     type: "sustain" | "soft";

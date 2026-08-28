@@ -18,13 +18,11 @@ import {
 } from "@mui/material";
 import { HorizontalRule, PlayArrow, Stop, ViewDay } from "@mui/icons-material";
 import "./App.css";
-import { PerformedScore } from "./verovio/PerformedScore";
-import { parseRecordings, type RecordingInfo } from "./parseRecordings";
-import { buildMidiFile } from "./buildMidiFile";
+import { PerformedScore } from "../verovio/PerformedScore";
+import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
+import { parseRecordings, type RecordingInfo } from "../mei/parseRecordings";
+import { buildMidiFile } from "../performance/buildMidiFile";
 import { useSampleProgress } from "./pianoLoading";
-
-/** MEI units given to one second of performed time */
-const DEFAULT_SCALE = 16;
 
 /** The performed seconds one system covers, when the score is broken into systems */
 const SYSTEM_DURATION = 10;
@@ -56,7 +54,7 @@ export default function Viewer() {
     const [recordings, setRecordings] = useState<RecordingInfo[]>([]);
     const [pitchMap, setPitchMap] = useState<Map<string, number>>(new Map());
     const [selectedIdx, setSelectedIdx] = useState(0);
-    const [scale, setScale] = useState(DEFAULT_SCALE);
+    const [scale, setScale] = useState(DEFAULT_PERFORMANCE_SCALE);
     const [singleLine, setSingleLine] = useState(false);
     const [extenders, setExtenders] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);

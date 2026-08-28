@@ -80,8 +80,8 @@
                         <staff xml:id="s70bpf5" n="1">
                            <layer xml:id="u1lxkfw1" n="1">
                               <note xml:id="n268a" dur.ppq="16" dur="4" oct="5" pname="c" stem.dir="up" />
-                              <note xml:id="n278" dur.ppq="8" dur="8" oct="4" pname="b" stem.dir="up" />
-                              <note xml:id="n282" dur.ppq="0" dur="8" oct="4" pname="b" grace="unacc" stem.dir="up" stem.mod="1slash" />
+                              <note xml:id="n278" dur.ppq="8" dur="8" oct="4" pname="b" stem.dir="up" accid="n" />
+                              <note xml:id="n282" dur.ppq="0" dur="8" oct="4" pname="b" grace="unacc" stem.dir="up" stem.mod="1slash" accid="n" />
                               <note xml:id="n283" dur.ppq="16" dur="4" oct="4" pname="a" stem.dir="up" />
                               <note xml:id="n287" dur.ppq="8" dur="8" oct="4" pname="g" stem.dir="up" accid.ges="s" />
                            </layer>
@@ -95,7 +95,7 @@
                               <note xml:id="n275" dur.ppq="16" dur="4" oct="4" pname="e" stem.dir="down" />
                               <note xml:id="n280" dur.ppq="8" dur="8" oct="4" pname="d" stem.dir="down" />
                               <note xml:id="n285" dur.ppq="16" dur="4" oct="4" pname="c" stem.dir="down" />
-                              <note xml:id="n289" dur.ppq="8" dur="8" oct="3" pname="b" stem.dir="down" />
+                              <note xml:id="n289" dur.ppq="8" dur="8" oct="3" pname="b" stem.dir="down" accid="n" />
                            </layer>
                         </staff>
                         <staff xml:id="t1ql72u5" n="2">
@@ -161,7 +161,7 @@
                               <note xml:id="n317" dur.ppq="8" dur="8" oct="5" pname="d" stem.dir="up" />
                               <note xml:id="n321" dur.ppq="0" dur="8" oct="5" pname="d" grace="unacc" stem.dir="up" stem.mod="1slash" />
                               <note xml:id="n322" dur.ppq="16" dur="4" oct="5" pname="c" stem.dir="up" />
-                              <note xml:id="n326" dur.ppq="8" dur="8" oct="4" pname="b" stem.dir="up" />
+                              <note xml:id="n326" dur.ppq="8" dur="8" oct="4" pname="b" stem.dir="up" accid="n" />
                            </layer>
                            <layer xml:id="b8vhzo8" n="2">
                               <space xml:id="d1fnxar3" dur.ppq="16" dur="4" />

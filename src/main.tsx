@@ -5,11 +5,11 @@ import { PianoContextProvider } from 'react-pianosound'
 import './index.css'
 
 // eslint-disable-next-line react-refresh/only-export-components
-const Viewer = React.lazy(() => import('./Viewer'))
+const Viewer = React.lazy(() => import('./ui/Viewer'))
 // eslint-disable-next-line react-refresh/only-export-components
-const EditorApp = React.lazy(() => import('./EditorApp'))
+const EditorApp = React.lazy(() => import('./ui/EditorApp'))
 // eslint-disable-next-line react-refresh/only-export-components
-const MLignApp = React.lazy(() => import('./MLignApp'))
+const MLignApp = React.lazy(() => import('./ui/MLignApp'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

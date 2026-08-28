@@ -1,6 +1,6 @@
-import { loadVerovio } from "./verovio/toolkit";
+import { loadVerovio } from "../verovio/toolkit";
 import { applyNotatedOnsets } from "./notatedOnsets";
-import { AnySpan } from "./MidiSpans";
+import { impliedAlterations } from "./accidentals";
 
 /** Every tie of the document, by the note it ends on and by the note it starts from */
 const readTies = (meiDoc: Document) => {
@@ -31,6 +31,17 @@ const lastOfTie = (id: string, tiedOn: Map<string, string>): string => {
         last = next;
     }
 };
+
+/**
+ * What has to be added to the pitch verovio reports for this note.
+ *
+ * Material verovio unfolds for itself - the second pass through a repeat - carries
+ * an id the document does not have, `n1-rend2` from `n1` in `ExpansionMap`. The
+ * notation it was unfolded from is what says how the note is altered, so the
+ * alteration written down for the note it came from is the one it takes.
+ */
+const alterationOf = (id: string, alterations: Map<string, number>): number =>
+    alterations.get(id) ?? alterations.get(id.replace(/-rend\d+$/, "")) ?? 0;
 
 export type ScoreNote = {
     onset: number; // in quarter notes
@@ -83,11 +94,19 @@ export const getNotesFromMEI = async (
     // each per note; every question they are asked below is prepared here instead
     const { tieInto, tiedOn } = readTies(meiDoc);
     const releasedAt = new Map<string, number>();
+    const struckAt = new Map<string, number>();
     for (const entry of timemap) {
         for (const note of entry.off ?? []) {
             if (!releasedAt.has(note)) releasedAt.set(note, entry.qstamp);
         }
+        for (const note of entry.on ?? []) {
+            if (!struckAt.has(note)) struckAt.set(note, entry.qstamp);
+        }
     }
+
+    // Needs the onsets: an accidental holds for the rest of its measure, and the
+    // layers of a staff are written one after the other rather than in that order
+    const alterations = impliedAlterations(meiDoc, struckAt);
 
     const notes = timemap
         .map(entry => {
@@ -120,7 +139,9 @@ export const getNotesFromMEI = async (
             return {
                 onset: entry.qstamp,
                 duration,
-                pitch,
+                // Verovio never reads the key signature, so what it returns is the
+                // note plus its own accidental and nothing else; see ./accidentals
+                pitch: pitch + alterationOf(entry.note, alterations),
                 note: entry.note
             }
         })
@@ -133,67 +154,4 @@ export const getNotesFromMEI = async (
 
     return notes.filter((entry, index, arr) =>
         arr.findIndex(e => e.onset === entry.onset && e.pitch === entry.pitch) === index)
-}
-
-export type Match = {
-    score_id: string;
-    performance_id: string;
-}
-
-export const naiveAligner = (
-    scoreNotes: ScoreNote[],
-    perfNotes: AnySpan[]
-): Match[] => {
-    const chords = Map.groupBy(scoreNotes, (note) => note.onset);
-
-    const tmpPerfNotes = [...perfNotes]
-        .filter(span => span.type === 'note')
-        .sort((a, b) => a.onsetMs - b.onsetMs);
-    const result: Match[] = []
-    for (const [, chordNotes] of chords) {
-        if (tmpPerfNotes.length === 0) {
-            console.log('no more perf notes left')
-            return result
-        }
-
-        if (chordNotes.length === 1) {
-            console.log('single note')
-            // only a single note? Should be the next performed note
-            if (tmpPerfNotes[0].pitch === chordNotes[0].pitch) {
-                result.push({
-                    score_id: chordNotes[0].note,
-                    performance_id: tmpPerfNotes[0].id
-                })
-                tmpPerfNotes.splice(0, 1)
-            }
-            else {
-                console.log('but no corresp')
-                // not? break off
-                return result
-            }
-        }
-        else {
-            let alignedChordNotes = 0
-            for (const chordNote of chordNotes) {
-                const corresp = tmpPerfNotes
-                    .slice(0, chordNotes.length)
-                    .find(n => n.pitch === chordNote.pitch)
-
-                if (!corresp) {
-                    // if we are within a chord and something 
-                    // could not be aligned, we consider the 
-                    // whole chord to be unmatched
-                    return result.slice(0, result.length - alignedChordNotes);
-                }
-                result.push({
-                    score_id: chordNote.note,
-                    performance_id: corresp.id
-                })
-                tmpPerfNotes.splice(tmpPerfNotes.indexOf(corresp), 1)
-                alignedChordNotes += 1;
-            }
-        }
-    }
-
-    return result
 }

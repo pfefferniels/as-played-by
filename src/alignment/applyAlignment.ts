@@ -1,9 +1,9 @@
 import type { MidiFile } from "midifile-ts";
-import { asSpans } from "./MidiSpans";
-import { insertMetadata, parseMetadata } from "./insertMetadata";
-import { insertPedals } from "./insertPedals";
-import { insertRecording, insertWhen } from "./When";
-import type { Match } from "./NaiveAligner";
+import { asSpans } from "../performance/midiSpans";
+import { insertMetadata, parseMetadata } from "../mei/insertMetadata";
+import { insertPedals } from "../mei/insertPedals";
+import { insertRecording, insertWhen } from "../mei/when";
+import type { Match } from "./types";
 
 /**
  * Write a matching of the score against a MIDI recording into the MEI, as the

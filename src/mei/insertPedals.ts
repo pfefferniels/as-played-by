@@ -1,6 +1,6 @@
 import { v4 } from "uuid";
-import { NoteSpan, SoftSpan, SustainSpan } from "./MidiSpans";
-import { ScoreEvent } from "./ScoreEvents";
+import { NoteSpan, SoftSpan, SustainSpan } from "../performance/midiSpans";
+import { ScoreEvent } from "./scoreEvents";
 
 export const insertPedals = (
     pedals: (SustainSpan | SoftSpan)[],

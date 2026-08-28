@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { read, type MidiFile } from 'midifile-ts'
-import { asSpans, type NoteSpan } from '../src/MidiSpans'
+import { asSpans, type NoteSpan } from '../src/performance/midiSpans'
 
 /** A Welte reproducing roll, which accelerates throughout: 29 tempo changes */
 const bytes = readFileSync(join(__dirname, 'welte-red_midi-exp_wv912mm2332_exp(1).mid'))

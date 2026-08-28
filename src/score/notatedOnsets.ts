@@ -1,4 +1,4 @@
-import type { ScoreNote } from "./NaiveAligner";
+import type { ScoreNote } from "./scoreNotes";
 
 /**
  * Verovio times a score the way it would play it: an arpeggio is rolled, and a

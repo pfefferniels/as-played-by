@@ -22,10 +22,13 @@ import {
     Typography,
 } from "@mui/material";
 import { ExpandMore } from "@mui/icons-material";
-import { asSpans, type NoteSpan } from "./MidiSpans";
-import { getNotesFromMEI } from "./NaiveAligner";
-import { applyAlignment } from "./applyAlignment";
-import { PerformedScore } from "./verovio/PerformedScore";
+import { asSpans, type NoteSpan } from "../performance/midiSpans";
+import { getNotesFromMEI } from "../score/scoreNotes";
+import { applyAlignment } from "../alignment/applyAlignment";
+import { PerformedScore } from "../verovio/PerformedScore";
+import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
+import { pitchName } from "../performance/pitch";
+import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
 import {
     MismatchedPairError,
     alignScoreToPerformance,
@@ -37,10 +40,7 @@ import {
     unshowableScoreIds,
     type AlignProgress,
     type AlignResult,
-} from "./mlign";
-
-/** MEI units given to one second of performed time */
-const DEFAULT_SCALE = 16;
+} from "../alignment/mlign";
 
 /** Matched noteheads, and the notes the recording never reached */
 const MATCHED_COLOUR = "#1d4ed8";
@@ -79,12 +79,6 @@ type Stage = keyof typeof STAGE_PERCENT;
 interface Status {
     text: string;
     percent: number;
-}
-
-const PITCH_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
-
-function pitchName(pitch: number): string {
-    return `${PITCH_NAMES[((pitch % 12) + 12) % 12]}${Math.floor(pitch / 12) - 1}`;
 }
 
 function messageOf(reason: unknown): string {
@@ -176,7 +170,7 @@ export default function MLignApp() {
 
     const [minConfidence, setMinConfidence] = useState(0);
     const [sliderValue, setSliderValue] = useState(0);
-    const [scale, setScale] = useState(DEFAULT_SCALE);
+    const [scale, setScale] = useState(DEFAULT_PERFORMANCE_SCALE);
 
     const scoreRef = useRef<HTMLDivElement>(null);
 
@@ -187,8 +181,8 @@ export default function MLignApp() {
      * called while rendering, where a throw takes the whole page down with no
      * error anywhere to show for it.
      */
-    const handleMEI = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const handleMEI = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = chosenFile(event);
         if (!file) return;
 
         reset();
@@ -199,23 +193,25 @@ export default function MLignApp() {
         setMeiName(undefined);
         setScoreProblem(undefined);
 
-        const reader = new FileReader();
-        reader.onerror = () => setScoreProblem(`${file.name} could not be read from disk.`);
-        reader.onload = () => {
-            const text = reader.result as string;
-            const problem = checkScore(text);
-            if (problem) {
-                setScoreProblem(problem);
-                return;
-            }
-            setMEI(text);
-            setMeiName(file.name);
-        };
-        reader.readAsText(file);
+        let text: string;
+        try {
+            text = await readAsText(file);
+        } catch (cause) {
+            setScoreProblem(messageOf(cause));
+            return;
+        }
+
+        const problem = checkScore(text);
+        if (problem) {
+            setScoreProblem(problem);
+            return;
+        }
+        setMEI(text);
+        setMeiName(file.name);
     };
 
-    const handleMIDI = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const handleMIDI = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = chosenFile(event);
         if (!file) return;
 
         reset();
@@ -223,35 +219,36 @@ export default function MLignApp() {
         setMidiName(undefined);
         setPerformanceProblem(undefined);
 
-        const reader = new FileReader();
-        reader.onerror = () =>
-            setPerformanceProblem(`${file.name} could not be read from disk.`);
-        reader.onload = () => {
-            const bytes = reader.result as ArrayBuffer;
-            const problem = checkPerformance(bytes);
-            if (problem) {
-                setPerformanceProblem(problem);
-                return;
-            }
+        let bytes: ArrayBuffer;
+        try {
+            bytes = await readAsArrayBuffer(file);
+        } catch (cause) {
+            setPerformanceProblem(messageOf(cause));
+            return;
+        }
 
-            let parsed: MidiFile;
-            try {
-                parsed = read(bytes);
-                // The magic bytes were right, so this is a MIDI file of some
-                // kind; walking it here is what proves the rest of it reads.
-                asSpans(parsed, true);
-            } catch {
-                setPerformanceProblem(
-                    "That performance file could not be read as MIDI. It may be damaged or " +
-                        "incomplete — try exporting it again."
-                );
-                return;
-            }
+        const problem = checkPerformance(bytes);
+        if (problem) {
+            setPerformanceProblem(problem);
+            return;
+        }
 
-            setMIDI(parsed);
-            setMidiName(file.name);
-        };
-        reader.readAsArrayBuffer(file);
+        let parsed: MidiFile;
+        try {
+            parsed = read(bytes);
+            // The magic bytes were right, so this is a MIDI file of some
+            // kind; walking it here is what proves the rest of it reads.
+            asSpans(parsed, true);
+        } catch {
+            setPerformanceProblem(
+                "That performance file could not be read as MIDI. It may be damaged or " +
+                    "incomplete — try exporting it again."
+            );
+            return;
+        }
+
+        setMIDI(parsed);
+        setMidiName(file.name);
     };
 
     /**

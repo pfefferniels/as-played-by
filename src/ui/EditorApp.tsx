@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { App } from "./App2";
+import { App } from "./AlignerApp";
 import "./App.css";
 
 // The piano lives in the provider main.tsx puts around the routes; a second one

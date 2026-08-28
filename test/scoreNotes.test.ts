@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { getNotesFromMEI, type ScoreNote } from '../src/NaiveAligner'
+import { getNotesFromMEI, type ScoreNote } from '../src/score/scoreNotes'
 
 const mei = readFileSync(join(__dirname, '..', 'public', 'transcription.mei'), 'utf-8')
 const moment = (note: ScoreNote) => `${note.onset}:${note.pitch}`

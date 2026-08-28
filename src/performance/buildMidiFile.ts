@@ -1,5 +1,5 @@
 import type { MidiFile, AnyEvent } from "midifile-ts";
-import type { RecordingInfo } from "./parseRecordings";
+import type { RecordingInfo } from "../mei/parseRecordings";
 
 interface AbsoluteEvent {
     absTime: number;
