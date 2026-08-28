@@ -16,6 +16,7 @@
  */
 
 import { accumulateLogits } from "./accumulate";
+import { attributionsOf } from "./attribution";
 import { decode } from "./decode";
 import { tablesToRow } from "./featurize";
 import { planWindows } from "./windows";
@@ -104,6 +105,17 @@ export interface DeletedNote {
 export interface InsertedNote {
     performanceId: string;
     confidence: number;
+    /**
+     * The written note the model says this one ornaments, when it says so.
+     *
+     * A second, separate answer from the alignment, and the one no other aligner
+     * gives: the match head is trained to send an ornament note to the null
+     * column, so a note being an insertion and a note decorating a written note
+     * are compatible facts, not competing ones. Absent when the model has no
+     * attribution head, when it called the note no ornament at all, or when it
+     * was not sure enough to say — see `./attribution`.
+     */
+    ornamentOf?: { scoreId: string; confidence: number };
 }
 
 /** What the alignment cost, for a status line and for reporting. */
@@ -144,6 +156,13 @@ export interface AlignOptions {
      * own — a worker, or a test that stands in for the model.
      */
     session?: MlignSession;
+    /**
+     * Ask the model which written note each played note ornaments. On by
+     * default, and silently nothing on a model whose graph has no attribution
+     * head. Turning it off saves the two extra per-token tensors a window
+     * carries back, at the cost of the one thing no other aligner offers.
+     */
+    attribution?: boolean;
 }
 
 /**
@@ -249,8 +268,12 @@ export async function alignScoreToPerformance(
     await announce(options, { stage: "running", done: 0, total: windows.length });
     let bundle: SimBundle;
     try {
-        bundle = await accumulateLogits(session, row, windows, (done, total) =>
-            options.onProgress?.({ stage: "running", done, total })
+        bundle = await accumulateLogits(
+            session,
+            row,
+            windows,
+            (done, total) => options.onProgress?.({ stage: "running", done, total }),
+            { attribution: options.attribution ?? true }
         );
     } catch (cause) {
         // Running out of the WASM heap is a normal JS exception and the session
@@ -266,6 +289,7 @@ export async function alignScoreToPerformance(
     started = performance.now();
     await announce(options, { stage: "decoding" });
     const triples = decode(row, bundle);
+    const attributions = attributionsOf(bundle);
     timings.decoding = since(started);
 
     const matches: MatchedNote[] = [];
@@ -284,9 +308,18 @@ export async function alignScoreToPerformance(
                 confidence: triple.confidence,
             });
         } else {
+            const attributed = attributions.get(triple.perfIdx);
             insertions.push({
                 performanceId: perf[triple.perfIdx].id,
                 confidence: triple.confidence,
+                ...(attributed
+                    ? {
+                          ornamentOf: {
+                              scoreId: score[attributed.scoreIdx].id,
+                              confidence: attributed.confidence,
+                          },
+                      }
+                    : {}),
             });
         }
     }

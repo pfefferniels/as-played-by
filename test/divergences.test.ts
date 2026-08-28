@@ -41,6 +41,8 @@ const build = (opts: {
   spans?: NoteSpan[]
   matches?: { scoreId: string; performanceId: string }[]
   insertions?: string[]
+  /** What the model says each played note ornaments, where it says anything */
+  ornamentOf?: Record<string, string>
   deletions?: string[]
   signs?: [string, OrnamentSign[]][]
   hasRepeats?: boolean
@@ -59,6 +61,9 @@ const build = (opts: {
       insertions: (opts.insertions ?? []).map((performanceId) => ({
         performanceId,
         confidence: 0.5,
+        ...(opts.ornamentOf?.[performanceId]
+          ? { ornamentOf: { scoreId: opts.ornamentOf[performanceId], confidence: 0.9 } }
+          : {}),
       })),
       scoreNotes,
       spans,
@@ -383,5 +388,138 @@ describe('a written note and the played note that stood in for it', () => {
     })
 
     expect(replacedOnes(all)).toHaveLength(0)
+  })
+})
+
+describe('what the model says a played note ornaments', () => {
+  it('anchors a figure to the written note the model names, not the one before it', () => {
+    // Played after n2 was struck, so the timing would hang it on n2
+    const all = build({
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 2100, 68)],
+      insertions: ['x1'],
+      ornamentOf: { x1: 'n1' },
+    })
+
+    const added = addedOnes(all)
+    expect(added[0].anchorId).toBe('n1')
+    expect(added[0].anchorFrom).toBe('model')
+    expect(added[0].anchorConfidence).toBeCloseTo(0.9, 5)
+  })
+
+  it('falls back on the timing where the model declined to say', () => {
+    const all = build({
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 2100, 68)],
+      insertions: ['x1'],
+    })
+
+    expect(addedOnes(all)[0].anchorId).toBe('n2')
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  it('holds a broad figure together across a silence the gap rule would cut', () => {
+    // 400 ms apart — well past gapMs — but all on the same written note
+    const all = build({
+      spans: [
+        span('p1', 0, 60),
+        span('p2', 2000, 67),
+        span('x1', 1000, 62),
+        span('x2', 1400, 64),
+        span('x3', 1800, 62),
+      ],
+      insertions: ['x1', 'x2', 'x3'],
+      ornamentOf: { x1: 'n1', x2: 'n1', x3: 'n1' },
+    })
+
+    const added = addedOnes(all)
+    expect(added).toHaveLength(1)
+    expect(added[0].perfIds).toEqual(['x1', 'x2', 'x3'])
+  })
+
+  it('keeps two figures apart when the model puts them on different notes', () => {
+    const all = build({
+      spans: [
+        span('p1', 0, 60),
+        span('p2', 2000, 67),
+        span('x1', 1000, 62),
+        span('x2', 1050, 64),
+      ],
+      insertions: ['x1', 'x2'],
+      ornamentOf: { x1: 'n1', x2: 'n2' },
+    })
+
+    const added = addedOnes(all)
+    expect(added).toHaveLength(2)
+    expect(added.map((d) => d.anchorId)).toEqual(['n1', 'n2'])
+  })
+
+  it('reads a single attributed note as ornamentation, which counting never would', () => {
+    const all = build({
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1000, 62)],
+      insertions: ['x1'],
+      ornamentOf: { x1: 'n1' },
+    })
+
+    const added = addedOnes(all)
+    expect(added[0].reading).toBe('ornamentation')
+    expect(added[0].because).toContain('90% sure')
+  })
+
+  it('still reads a sign the score writes as that sign, and says the model agrees', () => {
+    const all = build({
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 100, 62)],
+      insertions: ['x1'],
+      ornamentOf: { x1: 'n1' },
+      signs: [['n1', [trill]]],
+    })
+
+    const added = addedOnes(all)
+    expect(added[0].reading).toBe('written-ornament')
+    expect(added[0].because).toContain('as well')
+  })
+
+  it('anchors to a written note the model names even though nothing played it', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('quiet', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1200, 66)],
+      insertions: ['x1'],
+      deletions: ['quiet'],
+      ornamentOf: { x1: 'quiet' },
+    })
+
+    const added = addedOnes(all)
+    expect(added[0].anchorId).toBe('quiet')
+    expect(added[0].anchorFrom).toBe('model')
+    // The anchor never sounded, so nothing can be claimed about being struck with it
+    expect(added[0].reading).not.toBe('added-octave')
+    expect(added[0].reading).not.toBe('fuller-chord')
+  })
+
+  it('does not pair a note the model has already accounted for into a substitution', () => {
+    // Exactly the shape the substitution rule looks for — a written note due at
+    // 1000 ms that nothing played, and a played note 2 semitones off at 1200 ms —
+    // but the model says it ornaments that note, which is an answer rather than
+    // a coincidence
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('quiet', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1200, 66)],
+      insertions: ['x1'],
+      deletions: ['quiet'],
+      ornamentOf: { x1: 'quiet' },
+    })
+
+    expect(replacedOnes(all)).toHaveLength(0)
+    expect(addedOnes(all)).toHaveLength(1)
+    expect(missingOnes(all)).toHaveLength(1)
+  })
+
+  it('still pairs one where the model said nothing about the played note', () => {
+    const all = build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('quiet', 2, 64), scoreNote('n2', 4, 67)],
+      spans: [span('p1', 0, 60), span('p2', 2000, 67), span('x1', 1200, 66)],
+      insertions: ['x1'],
+      deletions: ['quiet'],
+    })
+
+    expect(replacedOnes(all)).toHaveLength(1)
   })
 })

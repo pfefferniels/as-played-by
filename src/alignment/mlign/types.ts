@@ -55,6 +55,12 @@ export type Window = readonly [s0: number, s1: number, p0: number, p1: number];
  * `sim` is row-major `(n, m)`. Cells no window covered hold `UNCOVERED_SIM`, and
  * the matching entries of `nullS` / `nullP` hold `UNCOVERED_NULL`, which is what
  * drives those notes to a deletion / insertion in the decode.
+ *
+ * `attr` is the ornament-attribution head, present only when it was asked for.
+ * It is row-major `(m, n)` — the other way round from `sim`, because it is a
+ * distribution over written notes for each played one — and `attrNone` is its
+ * "not an ornament" column, kept beside it rather than as an `n + 1`th entry so
+ * that the matrix stays a plain transpose of the score/performance grid.
  */
 export interface SimBundle {
     n: number;
@@ -62,6 +68,8 @@ export interface SimBundle {
     sim: Float32Array;
     nullS: Float32Array;
     nullP: Float32Array;
+    attr?: Float32Array;
+    attrNone?: Float32Array;
 }
 
 /** An alignment triple over table indices, as `decode` emits them. */

@@ -108,6 +108,8 @@ export const insertInsertionWhen = (
     extra: {
         confidence?: number;
         ornamentAnchor?: string | null;
+        ornamentAnchorFrom?: "model" | "timing" | null;
+        ornamentAnchorConfidence?: number;
         ornamentSlot?: number;
         reading?: WhenReading;
     } = {}
@@ -131,6 +133,16 @@ export const insertInsertionWhen = (
     }
     if (extra.ornamentAnchor) {
         extData(doc, when, "ornamentAnchor", "#" + extra.ornamentAnchor);
+    }
+    // Where the anchor came from, because the two are not the same claim: the
+    // model was asked which written note this decorates, and timing only knows
+    // which one was struck last. A reader looking at this file later can tell
+    // an answer from a guess.
+    if (extra.ornamentAnchor && extra.ornamentAnchorFrom) {
+        extData(doc, when, "ornamentAnchorFrom", extra.ornamentAnchorFrom);
+    }
+    if (extra.ornamentAnchorConfidence !== undefined) {
+        extData(doc, when, "ornamentAnchorConfidence", extra.ornamentAnchorConfidence.toFixed(3));
     }
     if (extra.ornamentSlot !== undefined) {
         extData(doc, when, "ornamentSlot", extra.ornamentSlot.toString());

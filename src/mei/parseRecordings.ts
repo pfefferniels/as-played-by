@@ -27,6 +27,9 @@ export interface RecordedDivergence {
     resp?: string;
     certainty?: string;
     ornamentAnchor?: string;
+    /** Whether the model named that anchor or the timing was guessed from */
+    ornamentAnchorFrom?: string;
+    ornamentAnchorConfidence?: number;
     ornamentSlot?: number;
 }
 
@@ -101,6 +104,8 @@ export function parseRecordings(mei: string): {
             let ornamentAnchor: string | undefined;
             let ornamentSlot: number | undefined;
             let writtenPitch: number | undefined;
+            let ornamentAnchorFrom: string | undefined;
+            let ornamentAnchorConfidence: number | undefined;
 
             for (let i = 0; i < extDatas.length; i++) {
                 const ext = extDatas[i];
@@ -118,6 +123,9 @@ export function parseRecordings(mei: string): {
                 else if (etype === "ornamentAnchor") ornamentAnchor = text.replace(/^#/, "");
                 else if (etype === "ornamentSlot") ornamentSlot = parseInt(text, 10);
                 else if (etype === "writtenPitch") writtenPitch = parseInt(text, 10);
+                else if (etype === "ornamentAnchorFrom") ornamentAnchorFrom = text;
+                else if (etype === "ornamentAnchorConfidence")
+                    ornamentAnchorConfidence = parseFloat(text);
             }
 
             // A written note that was never played: a note and no moment.
@@ -157,6 +165,8 @@ export function parseRecordings(mei: string): {
                     resp,
                     certainty,
                     ornamentAnchor,
+                    ornamentAnchorFrom,
+                    ornamentAnchorConfidence,
                     ornamentSlot,
                 });
                 continue;

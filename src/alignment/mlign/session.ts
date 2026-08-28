@@ -4,7 +4,12 @@
  * The exported graph is encoder-only: it stops at `s` / `p` / `match_s` /
  * `match_p` / `scale` and leaves the bilinear match head to the host, which is
  * `accumulate.ts`. This module is only responsible for getting the weights into
- * the browser and turning one window's feeds into those five tensors.
+ * the browser and turning one window's feeds into those tensors.
+ *
+ * The ornament-attribution head is exported the same way and on the same terms —
+ * `attr_s` / `attr_p` per token plus two constants, and the dot products left to
+ * the host — but it is asked for rather than always returned: its two per-token
+ * tensors are as large as `s` and `p` together.
  *
  * The contract is `MLign/models/mlign-v2-fp16.onnx.json`; the shapes below are
  * that file's `graph` block.
@@ -48,7 +53,7 @@ export interface ModelFeeds {
 }
 
 /**
- * The five raw graph outputs for one window.
+ * The raw graph outputs for one window.
  *
  * Everything is still indexed by *token*, not by note — the marker tokens are
  * included — so `s` row `1 + i` is score note `i` and `p` row `2 + n + j` is
@@ -69,12 +74,39 @@ export interface EncoderOutput {
     matchP: Float32Array;
     /** The learned logit scale. A graph constant, but read it rather than hardcode it. */
     scale: number;
+    /** The attribution head's score side, row-major `(T, D_MODEL)`, when asked for. */
+    attrS?: Float32Array;
+    /** Its performance side, row-major `(T, D_MODEL)`. */
+    attrP?: Float32Array;
+    /** The learned "not an ornament" vector, length `D_MODEL`. */
+    attrNone?: Float32Array;
+    /** The attribution head's own logit scale, which is not `scale`. */
+    attrScale?: number;
+}
+
+/** What one forward pass should return. */
+export interface RunOptions {
+    /**
+     * Also return the attribution head's vectors. Off by default because they
+     * double what a window carries back, and most of the pipeline never looks
+     * at them.
+     */
+    attribution?: boolean;
 }
 
 /** A loaded model, ready to run windows through. */
 export interface MlignSession {
     /** Forward one window. Rejects rather than hanging if the window is too big. */
-    run(feeds: ModelFeeds): Promise<EncoderOutput>;
+    run(feeds: ModelFeeds, options?: RunOptions): Promise<EncoderOutput>;
+    /**
+     * Whether this graph carries the ornament-attribution head at all.
+     *
+     * The alignment outputs are the same either way, so an older model still
+     * runs; it simply cannot be asked which written note a played note
+     * decorates. Read it rather than assuming, so that swapping the file in
+     * `public/` is the only thing swapping a model takes.
+     */
+    readonly hasAttribution: boolean;
     /** Free the WASM-side session. */
     release(): Promise<void>;
 }
@@ -143,19 +175,32 @@ export async function createMlignSession(
         graphOptimizationLevel: "all",
     });
 
+    const hasAttribution = session.outputNames.includes("attr_s");
+    const ALIGNMENT_OUTPUTS = ["s", "p", "match_s", "match_p", "scale"];
+    const ATTRIBUTION_OUTPUTS = [...ALIGNMENT_OUTPUTS, "attr_s", "attr_p", "attr_none", "attr_scale"];
+
     return {
-        async run(feeds: ModelFeeds): Promise<EncoderOutput> {
+        hasAttribution,
+
+        async run(feeds: ModelFeeds, options: RunOptions = {}): Promise<EncoderOutput> {
             const { n, m } = feeds;
             const T = 2 + n + m;
+            const wantAttribution = !!options.attribution && hasAttribution;
 
             let results: ort.InferenceSession.OnnxValueMapType;
             try {
-                results = await session.run({
-                    pitch: new ort.Tensor("int64", feeds.pitch, [1, T]),
-                    cont: new ort.Tensor("float32", feeds.cont, [1, T, 6]),
-                    segment: new ort.Tensor("int64", feeds.segment, [1, T]),
-                    position: new ort.Tensor("int64", feeds.position, [1, T]),
-                });
+                // Named rather than "everything": the attribution vectors are as
+                // big as `s` and `p` together, and this is what makes asking for
+                // them a choice rather than a cost the whole pipeline pays.
+                results = await session.run(
+                    {
+                        pitch: new ort.Tensor("int64", feeds.pitch, [1, T]),
+                        cont: new ort.Tensor("float32", feeds.cont, [1, T, 6]),
+                        segment: new ort.Tensor("int64", feeds.segment, [1, T]),
+                        position: new ort.Tensor("int64", feeds.position, [1, T]),
+                    },
+                    wantAttribution ? ATTRIBUTION_OUTPUTS : ALIGNMENT_OUTPUTS
+                );
             } catch (cause) {
                 // The relative-position bias is a dense (1, H, T, T) tensor and
                 // ORT's WASM heap is 32-bit, so a long enough window exhausts it
@@ -176,6 +221,14 @@ export async function createMlignSession(
                 matchS: results.match_s.data as Float32Array,
                 matchP: results.match_p.data as Float32Array,
                 scale: (results.scale.data as Float32Array)[0],
+                ...(wantAttribution
+                    ? {
+                          attrS: results.attr_s.data as Float32Array,
+                          attrP: results.attr_p.data as Float32Array,
+                          attrNone: results.attr_none.data as Float32Array,
+                          attrScale: (results.attr_scale.data as Float32Array)[0],
+                      }
+                    : {}),
             };
         },
 

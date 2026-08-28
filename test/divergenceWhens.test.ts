@@ -34,6 +34,8 @@ const added = (perfIds: string[], anchorId: string | null): Divergence => ({
   perfIds,
   pitches: perfIds.map(() => 60),
   anchorId,
+  anchorFrom: anchorId ? 'model' : null,
+  anchorConfidence: anchorId ? 0.88 : undefined,
   signs: [],
   reading: 'written-ornament',
   because: 'the score writes a trill here',
@@ -117,6 +119,24 @@ describe('writing divergences into the recording', () => {
       (s) => s.textContent
     )
     expect(slots).toEqual(['0', '1'])
+  })
+
+  it('says whether the model named the anchor or the timing was guessed from', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [added([spans[0].id], scoreId)],
+    })
+
+    const found = divergencesIn(result).find((d) => d.kind === 'insertion')
+    expect(found?.ornamentAnchorFrom).toBe('model')
+    expect(found?.ornamentAnchorConfidence).toBeCloseTo(0.88, 3)
+  })
+
+  it('leaves the provenance out where there is no anchor to have one', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [added([spans[0].id], null)],
+    })
+
+    expect(result).not.toContain('ornamentAnchorFrom')
   })
 
   it('leaves out a deletion against a note the document does not hold', () => {

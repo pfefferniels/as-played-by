@@ -78,6 +78,17 @@ export interface AddedDivergence {
     pitches: number[];
     /** The score note this event decorates or belongs to, where there is one */
     anchorId: string | null;
+    /**
+     * Where the anchor came from.
+     *
+     * `model` means the attribution head named it - the one question the
+     * alignment itself cannot answer. `timing` means it was taken to be the last
+     * written note struck before the figure, which is a guess, and a poor one
+     * for anything that leans on the note it precedes.
+     */
+    anchorFrom: "model" | "timing" | null;
+    /** How sure the head was, when it is the head that answered */
+    anchorConfidence?: number;
     /** The sign already on the anchor, which is what `written-ornament` rests on */
     signs: OrnamentSign[];
     reading: AddedReading;
@@ -143,6 +154,14 @@ export interface DivergenceOptions {
     /** Whether the score writes a repeat with signs rather than writing it out */
     hasRepeats?: boolean;
     /**
+     * How long a silence ends a figure whose notes the model has all put on the
+     * same written note. Far wider than `gapMs`, because the model saying so is
+     * better evidence than the timing: a broad ornament on an early recording
+     * runs to half a second and more, and splitting it on a silence is exactly
+     * the mistake the attribution head exists to stop.
+     */
+    attributedGapMs?: number;
+    /**
      * How far from where a written note was due a played note may fall and still
      * be read as standing in for it. Wider than `simultaneousMs`, because the
      * moment is not measured but interpolated from the notes around it, and
@@ -162,6 +181,7 @@ const DEFAULTS = {
     simultaneousMs: 50,
     figureNotes: 3,
     hasRepeats: false,
+    attributedGapMs: 1000,
     replacementMs: 200,
     replacementSemitones: 12,
 };
@@ -237,7 +257,13 @@ export function divergencesOf(
     const firstMs = anchors.length > 0 ? anchors[0].onsetMs : Infinity;
     const lastMs = anchors.length > 0 ? anchors[anchors.length - 1].onsetMs : -Infinity;
 
-    const played = groupPlayed(input, spanById, anchors, settings.gapMs);
+    const played = groupPlayed(
+        input,
+        spanById,
+        anchors,
+        settings.gapMs,
+        settings.attributedGapMs
+    );
     const unplayed = groupUnplayed(input, scoreById);
 
     const { replaced, playedLeft, unplayedLeft } = pairReplacements(
@@ -249,6 +275,8 @@ export function divergencesOf(
 
     const ctx: AddedContext = {
         anchors,
+        anchorByScoreId: new Map(anchors.map((anchor) => [anchor.scoreId, anchor])),
+        scoreById,
         firstMs,
         lastMs,
         simultaneousMs: settings.simultaneousMs,
@@ -279,7 +307,8 @@ function groupPlayed(
     input: DivergenceInput,
     spanById: Map<string, NoteSpan>,
     anchors: Anchor[],
-    gapMs: number
+    gapMs: number,
+    attributedGapMs: number
 ): PlayedGroup[] {
     const played = input.insertions
         .map((insertion) => ({ insertion, span: spanById.get(insertion.performanceId) }))
@@ -290,12 +319,28 @@ function groupPlayed(
     for (const entry of played) {
         const current = groups[groups.length - 1];
         const previous = current?.entries[current.entries.length - 1];
+        if (previous === undefined) {
+            groups.push({ id: `added-${groups.length}`, entries: [entry] });
+            continue;
+        }
 
+        const silence = entry.span.onsetMs - previous.span.onsetMs;
+        const named = entry.insertion.ornamentOf?.scoreId;
+        const namedBefore = previous.insertion.ornamentOf?.scoreId;
+
+        // Two notes the model puts on the same written note are one figure, and
+        // the timing only has to agree that they are in the same passage. Where
+        // it has not spoken, the figure is whatever ran on without a silence
+        // against the same note - which is the older guess, kept for the notes
+        // the head declined and for a model that has no head at all.
         const sameEvent =
-            previous !== undefined &&
-            entry.span.onsetMs - previous.span.onsetMs <= gapMs &&
-            anchorFor(previous.span.onsetMs, anchors)?.scoreId ===
-                anchorFor(entry.span.onsetMs, anchors)?.scoreId;
+            named !== undefined && namedBefore !== undefined
+                ? named === namedBefore && silence <= attributedGapMs
+                : named === undefined &&
+                  namedBefore === undefined &&
+                  silence <= gapMs &&
+                  anchorFor(previous.span.onsetMs, anchors)?.scoreId ===
+                      anchorFor(entry.span.onsetMs, anchors)?.scoreId;
 
         if (sameEvent) current.entries.push(entry);
         else groups.push({ id: `added-${groups.length}`, entries: [entry] });
@@ -410,9 +455,17 @@ function pairReplacements(
         cost: number;
     }[] = [];
 
+    // A played note the model has already accounted for is not a loose half
+    // looking for a partner. Falling at the moment a written note was due is a
+    // coincidence; being named as that note's ornament is an answer, and the
+    // reader can still overrule it at the note itself.
     const singles = played
         .map((group, index) => ({ group, index }))
-        .filter((entry) => entry.group.entries.length === 1);
+        .filter(
+            (entry) =>
+                entry.group.entries.length === 1 &&
+                entry.group.entries[0].insertion.ornamentOf === undefined
+        );
 
     unplayed.forEach((group, unplayedIndex) => {
         if (group.entries.length !== 1) return;
@@ -542,11 +595,55 @@ function intervalWords(semitones: number): string {
 
 interface AddedContext {
     anchors: Anchor[];
+    /** The matched notes again, by id, for looking an attributed anchor up */
+    anchorByScoreId: Map<string, Anchor>;
+    scoreById: Map<string, ScoreNote>;
     firstMs: number;
     lastMs: number;
     simultaneousMs: number;
     figureNotes: number;
     hasRepeats: boolean;
+}
+
+/**
+ * The written note a figure belongs to, and where that answer came from.
+ *
+ * The model's answer wins wherever there is one. It is the only one of the two
+ * that is an answer to the question actually asked - which written note does
+ * this decorate - rather than to the question the timing can answer, which is
+ * which written note was struck most recently.
+ *
+ * A note the model attributes to a written note that itself went unplayed still
+ * has an anchor; it simply has no performed moment, so `onsetMs` is NaN and
+ * every comparison against it is false. Which is right: nothing can be said
+ * about whether the two were struck together when one of them never was.
+ */
+function anchorOf(
+    group: PlayedGroup,
+    ctx: AddedContext
+): { anchor: Anchor | undefined; from: "model" | "timing" | null; confidence?: number } {
+    const named = group.entries[0].insertion.ornamentOf;
+    if (named) {
+        const matched = ctx.anchorByScoreId.get(named.scoreId);
+        if (matched) return { anchor: matched, from: "model", confidence: named.confidence };
+
+        const note = ctx.scoreById.get(named.scoreId);
+        if (note) {
+            return {
+                anchor: {
+                    scoreId: note.note,
+                    onset: note.onset,
+                    onsetMs: Number.NaN,
+                    pitch: note.pitch,
+                },
+                from: "model",
+                confidence: named.confidence,
+            };
+        }
+    }
+
+    const guessed = anchorFor(group.entries[0].span.onsetMs, ctx.anchors);
+    return { anchor: guessed, from: guessed ? "timing" : null };
 }
 
 function readPlayed(
@@ -556,10 +653,10 @@ function readPlayed(
 ): AddedDivergence {
     const spans = group.entries.map((entry) => entry.span);
     const onsetMs = spans[0].onsetMs;
-    const anchor = anchorFor(onsetMs, ctx.anchors);
+    const { anchor, from, confidence } = anchorOf(group, ctx);
     const signs = anchor ? input.signs.get(anchor.scoreId) ?? [] : [];
 
-    const { reading, because } = readAdded(spans, anchor, signs, ctx);
+    const { reading, because } = readAdded(spans, anchor, signs, ctx, from === "model" ? confidence : undefined);
 
     return {
         kind: "added",
@@ -567,6 +664,8 @@ function readPlayed(
         perfIds: spans.map((span) => span.id),
         pitches: spans.map((span) => span.pitch),
         anchorId: anchor?.scoreId ?? null,
+        anchorFrom: anchor ? from : null,
+        ...(from === "model" && confidence !== undefined ? { anchorConfidence: confidence } : {}),
         signs,
         reading,
         because,
@@ -605,7 +704,8 @@ function readAdded(
     spans: NoteSpan[],
     anchor: Anchor | undefined,
     signs: OrnamentSign[],
-    ctx: AddedContext
+    ctx: AddedContext,
+    attributed?: number
 ): { reading: AddedReading; because: string } {
     const onsetMs = spans[0].onsetMs;
 
@@ -623,7 +723,27 @@ function readAdded(
             because:
                 `The score writes a ${names} on this note. Verovio reads an ornament sign as ` +
                 `the single note it is written on, so the rest of what was played has no note ` +
-                `to match - these are that ornament, performed.`,
+                `to match - these are that ornament, performed.` +
+                (attributed === undefined
+                    ? ""
+                    : ` The model puts ${
+                          spans.length === 1 ? "this note" : `all ${spans.length} notes`
+                      } on that written note as well.`),
+        };
+    }
+
+    // The model was asked which written note this decorates, and answered. That
+    // is a different question from the alignment's, and the only evidence here
+    // that is about ornamentation rather than about counting and proximity.
+    if (anchor && attributed !== undefined) {
+        return {
+            reading: "ornamentation",
+            because:
+                `The model reads ${
+                    spans.length === 1 ? "this note" : `these ${spans.length} notes`
+                } as ornamenting a written note, ${Math.round(attributed * 100)}% sure of ` +
+                `which one, and the score writes no ornament there. It has only ever been ` +
+                `taught this on rendered performances, so it is worth looking at.`,
         };
     }
 

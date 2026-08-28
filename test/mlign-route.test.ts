@@ -328,6 +328,7 @@ describe('the ids the matches come back with', () => {
           scale: 1,
         }
       },
+      hasAttribution: false,
       async release() {},
     }
     return { session, feeds }
