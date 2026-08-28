@@ -5,6 +5,16 @@ import { clearExtenders, drawExtenders } from "./extenders";
 import { clearExtraNotes, drawExtraNotes, type ExtraNote } from "./extraNotes";
 import { readPerformedNote, type PerformedNote } from "./performedNote";
 
+/** The classes this component draws with, which its observer must not react to. */
+const DRAWN = ["performanceExtender", "performanceExtraNote"];
+
+const isOurs = (node: Node) =>
+    node.nodeType === 1 && DRAWN.some((name) => (node as Element).classList?.contains(name));
+
+/** Whether a mutation is the drawing's own work rather than a new render. */
+const isDrawing = (record: MutationRecord) =>
+    [...record.addedNodes].every(isOurs) && [...record.removedNodes].every(isOurs);
+
 interface PerformedScoreProps {
     mei: string;
     /** Overrides of the defaults in ./toolkit */
@@ -70,26 +80,40 @@ export const PerformedScore = ({
         };
     }, [mei, optionsKey]);
 
-    // The extenders are drawn from what the rendered notes say about themselves,
-    // so they are added once the pages are in the document
+    /**
+     * Everything drawn on top of verovio's own markup: the extender lines, and
+     * the played notes that have no note in the score. Both are measured from
+     * notes verovio has placed, so neither can be drawn until it has.
+     *
+     * They are also redrawn whenever that markup is replaced. React re-inserts
+     * the rendered SVG whole when the document changes, which silently detaches
+     * anything drawn into it; keying this on the props alone left a score whose
+     * lines and crosses had simply disappeared, with nothing to say they ever
+     * existed. The observer ignores the drawing's own mutations, or it would
+     * trigger itself for ever.
+     */
     useLayoutEffect(() => {
-        if (!container.current) return;
+        const root = container.current;
+        if (!root) return;
 
-        if (extenders) drawExtenders(container.current, JSON.parse(optionsKey));
-        else clearExtenders(container.current);
-    }, [pages, extenders, optionsKey]);
+        const options = JSON.parse(optionsKey);
+        const draw = () => {
+            if (extenders) drawExtenders(root, options);
+            else clearExtenders(root);
 
-    // The same for the played notes with no note in the score: they are measured
-    // from notes verovio has placed, so they can only be drawn once it has
-    useLayoutEffect(() => {
-        if (!container.current) return;
+            if (extraNotes?.length) drawExtraNotes(root, extraNotes, { ...options, tonic });
+            else clearExtraNotes(root);
+        };
 
-        if (extraNotes?.length) {
-            drawExtraNotes(container.current, extraNotes, { ...JSON.parse(optionsKey), tonic });
-        } else {
-            clearExtraNotes(container.current);
-        }
-    }, [pages, extraNotes, tonic, optionsKey]);
+        draw();
+
+        const observer = new MutationObserver((records) => {
+            if (records.every(isDrawing)) return;
+            draw();
+        });
+        observer.observe(root, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    }, [pages, extenders, extraNotes, tonic, optionsKey]);
 
     const noteHandler = (
         handler?: (note: PerformedNote, element: SVGElement) => void

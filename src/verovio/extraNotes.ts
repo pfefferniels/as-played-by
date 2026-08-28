@@ -112,33 +112,63 @@ export function drawExtraNotes(
     const tonic = options?.tonic ?? "C";
     const colour = options?.colour ?? "#b45309";
 
-    for (const system of root.querySelectorAll(".system")) {
-        const references = referencesIn(system);
-        if (references.length === 0) continue;
+    // Each system's notes, read once. A note is drawn on exactly one of them:
+    // the spans overlap by design, so that a note played just after the last
+    // written note of a system still has somewhere to go, and iterating systems
+    // outermost would draw such a note twice.
+    const systems = [...root.querySelectorAll(".system")]
+        .map((system) => referencesIn(system))
+        .filter((references) => references.length > 0)
+        .map((references) => ({ references, span: performedSpanOf(references) }));
 
-        const span = performedSpanOf(references);
+    if (systems.length === 0) return;
 
-        for (const note of notes) {
-            // Only on the system whose music this note was played during, or it
-            // would be drawn once per system
-            if (note.onsetMs < span.from || note.onsetMs > span.to) continue;
+    for (const note of notes) {
+        const step = diatonicStep(note.pitch, tonic);
+        if (step === undefined) continue;
 
-            const step = diatonicStep(note.pitch, tonic);
-            if (step === undefined) continue;
+        const system = systemFor(systems, note.onsetMs);
+        if (!system) continue;
 
-            // Measure from the reference nearest in pitch on the staff that note
-            // would belong to, which keeps the extrapolation short
-            const reference = nearestReference(references, note.onsetMs, step);
-            if (!reference) continue;
+        // Measure from the reference nearest in pitch on the staff that note
+        // would belong to, which keeps the extrapolation short
+        const reference = nearestReference(system.references, note.onsetMs, step);
+        if (!reference) continue;
 
-            const x = reference.x + ((note.onsetMs - reference.onsetMs) / 1000) * perSecond;
-            const y = reference.y - (step - reference.step) * (space / 2);
+        const x = reference.x + ((note.onsetMs - reference.onsetMs) / 1000) * perSecond;
+        const y = reference.y - (step - reference.step) * (space / 2);
 
-            reference.staff.appendChild(
-                cross(reference.staff.ownerDocument, note, x, y, space, colour)
-            );
+        reference.staff.appendChild(
+            cross(reference.staff.ownerDocument, note, x, y, space, colour)
+        );
+    }
+}
+
+interface System {
+    references: Reference[];
+    span: { from: number; to: number };
+}
+
+/**
+ * The one system a played note belongs on: the one whose own notes it falls
+ * among, and where two overlap, whichever holds the moment more squarely.
+ */
+function systemFor(systems: System[], onsetMs: number): System | undefined {
+    let best: System | undefined;
+    let bestCost = Infinity;
+
+    for (const system of systems) {
+        if (onsetMs < system.span.from || onsetMs > system.span.to) continue;
+
+        const middle = (system.span.from + system.span.to) / 2;
+        const cost = Math.abs(onsetMs - middle);
+        if (cost < bestCost) {
+            bestCost = cost;
+            best = system;
         }
     }
+
+    return best;
 }
 
 /**

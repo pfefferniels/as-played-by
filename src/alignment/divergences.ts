@@ -290,11 +290,13 @@ function readAdded(
     if (anchor && Math.abs(onsetMs - anchor.onsetMs) <= ctx.simultaneousMs) {
         const interval = spans[0].pitch - anchor.pitch;
         if (Math.abs(interval) % 12 === 0 && interval !== 0) {
+            const octaves = Math.abs(interval) / 12;
             return {
                 reading: "added-octave",
-                because: `Struck with a written note, ${Math.abs(interval) / 12} octave(s) ${
-                    interval > 0 ? "above" : "below"
-                } it.`,
+                because:
+                    `Struck with a written note, ` +
+                    `${octaves === 1 ? "an octave" : `${octaves} octaves`} ` +
+                    `${interval > 0 ? "above" : "below"} it.`,
             };
         }
         return {
