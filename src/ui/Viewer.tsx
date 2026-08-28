@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePiano } from "react-pianosound";
-import type { AnyEvent } from "midifile-ts";
+import { useEffect, useMemo, useState } from "react";
 import {
     AppBar,
     Alert,
     Box,
-    Button,
     LinearProgress,
     MenuItem,
     Select,
@@ -16,37 +13,23 @@ import {
     Toolbar,
     Typography,
 } from "@mui/material";
-import { HorizontalRule, PlayArrow, Stop, ViewDay } from "@mui/icons-material";
+import { HorizontalRule, ViewDay } from "@mui/icons-material";
 import "./App.css";
 import { PerformedScore } from "../verovio/PerformedScore";
 import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
 import { parseRecordings, type RecordingInfo } from "../mei/parseRecordings";
-import { buildMidiFile } from "../performance/buildMidiFile";
-import { useSampleProgress } from "./pianoLoading";
+import type { PlayableNote } from "../performance/buildMidiFile";
+import { clock, usePlayback } from "./usePlayback";
+import { PlaybackBar } from "./PlaybackBar";
 
 /** The performed seconds one system covers, when the score is broken into systems */
 const SYSTEM_DURATION = 10;
-
-function highlightNote(noteId: string) {
-    const el = document.querySelector(`[data-id="${noteId}"]`);
-    if (!el) return;
-
-    el.classList.add("note-playing");
-    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-
-    setTimeout(() => el.classList.remove("note-playing"), 600);
-}
-
-function formatDuration(ms: number): string {
-    const seconds = Math.round(ms / 1000);
-    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
 
 function describe(recording: RecordingInfo): string {
     const offsets = [...recording.noteSpans.values()].map((span) => span.offsetMs);
     if (offsets.length === 0) return "no notes";
 
-    return `${offsets.length} notes · ${formatDuration(Math.max(...offsets))}`;
+    return `${offsets.length} notes · ${clock(Math.max(...offsets))}`;
 }
 
 export default function Viewer() {
@@ -57,19 +40,35 @@ export default function Viewer() {
     const [scale, setScale] = useState(DEFAULT_PERFORMANCE_SCALE);
     const [singleLine, setSingleLine] = useState(false);
     const [extenders, setExtenders] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
     const [error, setError] = useState<string>();
-
-    const { play, stop, status } = usePiano();
-    const loading = status === "loading";
-    const samples = useSampleProgress(loading);
 
     const selectedRecording = recordings[selectedIdx];
 
-    const midiFile = useMemo(() => {
-        if (!selectedRecording || pitchMap.size === 0) return null;
-        return buildMidiFile(selectedRecording, pitchMap);
+    /**
+     * The notes of the recording, with the score note each one sounded as its
+     * id: the <when> says when a note was played, and the score says which note
+     * and at what pitch.
+     */
+    const notes = useMemo<PlayableNote[]>(() => {
+        if (!selectedRecording) return [];
+
+        return [...selectedRecording.noteSpans].flatMap(([noteId, span]) => {
+            const pitch = pitchMap.get(noteId);
+            return pitch === undefined
+                ? []
+                : [
+                      {
+                          id: noteId,
+                          pitch,
+                          onsetMs: span.onsetMs,
+                          offsetMs: span.offsetMs,
+                          velocity: span.velocity,
+                      },
+                  ];
+        });
     }, [selectedRecording, pitchMap]);
+
+    const playback = usePlayback({ notes, pedals: selectedRecording?.pedalEvents });
 
     // The recording is selected by its 1-based position, the way verovio counts them
     const options = useMemo(
@@ -96,24 +95,6 @@ export default function Viewer() {
             })
             .catch((reason: unknown) => setError(String(reason)));
     }, []);
-
-    const handleStop = useCallback(() => {
-        stop();
-        setIsPlaying(false);
-        document
-            .querySelectorAll(".note-playing")
-            .forEach((el) => el.classList.remove("note-playing"));
-    }, [stop]);
-
-    const handlePlay = useCallback(() => {
-        if (!midiFile) return;
-        setIsPlaying(true);
-        play(midiFile, (event: AnyEvent) => {
-            if (event.type === "meta" && event.subtype === "text" && "text" in event) {
-                highlightNote((event as AnyEvent & { text: string }).text);
-            }
-        });
-    }, [midiFile, play]);
 
     if (error) {
         return (
@@ -143,23 +124,14 @@ export default function Viewer() {
                 sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}
             >
                 <Toolbar sx={{ gap: 1.5, flexWrap: "wrap", py: 1 }}>
-                    <Button
-                        variant="contained"
-                        disableElevation
-                        startIcon={isPlaying ? <Stop /> : <PlayArrow />}
-                        onClick={isPlaying ? handleStop : handlePlay}
-                        disabled={!midiFile || status !== "done"}
-                        sx={{ minWidth: "7rem" }}
-                    >
-                        {isPlaying ? "Stop" : "Play"}
-                    </Button>
+                    <PlaybackBar playback={playback} />
 
                     {recordings.length > 1 && (
                         <Select
                             size="small"
                             value={selectedIdx}
                             onChange={(e) => {
-                                handleStop();
+                                playback.stop();
                                 setSelectedIdx(Number(e.target.value));
                             }}
                         >
@@ -174,24 +146,6 @@ export default function Viewer() {
                     {selectedRecording && (
                         <Typography variant="body2" color="text.secondary">
                             {describe(selectedRecording)}
-                        </Typography>
-                    )}
-
-                    {loading && (
-                        <Stack sx={{ minWidth: "12rem" }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Loading piano samples
-                                {samples.samples > 0 && ` · ${samples.samples} loaded`}
-                                {samples.bytes > 0 &&
-                                    ` · ${(samples.bytes / 1_000_000).toFixed(1)} MB`}
-                            </Typography>
-                            <LinearProgress sx={{ mt: 0.5, borderRadius: 1 }} />
-                        </Stack>
-                    )}
-
-                    {status === "error" && (
-                        <Typography variant="body2" color="error">
-                            The piano samples could not be loaded
                         </Typography>
                     )}
 

@@ -23,6 +23,9 @@ import { spellMidi } from "../performance/spellPitch";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const EXTRA_CLASS = "performanceExtraNote";
 
+/** The colour of a note that was played and is not written anywhere */
+export const EXTRA_COLOUR = "#15803d";
+
 /** Where C stands in a diatonic octave, so that a step can be counted from a name */
 const STEPS = { c: 0, d: 1, e: 2, f: 3, g: 4, a: 5, b: 6 } as const;
 
@@ -110,7 +113,7 @@ export function drawExtraNotes(
     const perSecond = unitsPerSecond(options);
     const space = staffSpace(options);
     const tonic = options?.tonic ?? "C";
-    const colour = options?.colour ?? "#b45309";
+    const colour = options?.colour ?? EXTRA_COLOUR;
 
     // Each system's notes, read once. A note is drawn on exactly one of them:
     // the spans overlap by design, so that a note played just after the last
@@ -249,7 +252,13 @@ function cross(
         `M${x - arm} ${y - arm} L${x + arm} ${y + arm} M${x - arm} ${y + arm} L${x + arm} ${y - arm}`
     );
     mark.setAttribute("fill", "none");
+    // As a style rather than an attribute, because verovio puts a rule of its own
+    // into every SVG it renders - `#<id> path { stroke: currentColor }` - and an
+    // id selector outranks any presentation attribute. An inline style outranks
+    // the rule in turn, while still giving way to the `!important` a view paints
+    // a selected mark with.
     mark.setAttribute("stroke", colour);
+    (mark as SVGElement).style.setProperty("stroke", colour);
     mark.setAttribute("stroke-width", String(space / 5));
     group.appendChild(mark);
 

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { read, type MidiFile } from "midifile-ts";
 import {
@@ -17,12 +17,16 @@ import {
 } from "@mui/material";
 import { Download } from "@mui/icons-material";
 import { asSpans, type NoteSpan } from "../performance/midiSpans";
+import type { PlayablePedal } from "../performance/buildMidiFile";
 import { getNotesFromMEI, type ScoreNote } from "../score/scoreNotes";
 import { applyAlignment } from "../alignment/applyAlignment";
 import { PerformedScore } from "../verovio/PerformedScore";
 import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
-import type { ExtraNote } from "../verovio/extraNotes";
+import { EXTRA_COLOUR, type ExtraNote } from "../verovio/extraNotes";
+import { OMITTED_COLOUR, type OmittedGroup } from "../verovio/omissionMarks";
 import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
+import { usePlayback } from "./usePlayback";
+import { PlaybackBar } from "./PlaybackBar";
 import { divergencesOf, type Divergence } from "../alignment/divergences";
 import { ornamentSignsOf } from "../mei/ornamentSigns";
 import { addOrnamentSign, addPlayedNotes, markUnplayed, replaceWithPlayed } from "../mei/editScore";
@@ -47,37 +51,47 @@ import {
     type AlignResult,
 } from "../alignment/mlign";
 
-/** Matched noteheads, and the notes the recording never reached */
-const MATCHED_COLOUR = "#1d4ed8";
-const UNPLAYED_COLOUR = "#c9ced6";
-/** The played notes with no note in the score, drawn as crosses */
-const EXTRA_COLOUR = "#b45309";
-const SELECTED_COLOUR = "#dc2626";
+/**
+ * What the score is coloured by, and why it is coloured that way round.
+ *
+ * A matched note is grey. It is the ordinary case and most of the page, and
+ * nothing about it needs looking at - which is exactly what grey says. The two
+ * colours that carry any weight are the two disagreements: red where the score
+ * has a note the recording never reached, green where the recording has a note
+ * the score never wrote. Everything else on the page is either one of those or
+ * unremarkable, so red and green are the only things the eye is drawn to.
+ */
+const MATCHED_COLOUR = "#6b7280";
+/** A note verovio could place nowhere: nothing is known about it, rather than something */
+const UNALIGNED_COLOUR = "#c9ced6";
 /** A written note the recording played as something else: sounded, but not as written */
 const REPLACED_COLOUR = "#7c3aed";
+/** Whichever disagreement the reader currently has open */
+const SELECTED_COLOUR = "#1d4ed8";
+/** A note sounding, while the performance is being listened to */
+const PLAYING_COLOUR = "#f97316";
 
+const ink = (colour: string) => ({
+    fill: `${colour} !important`,
+    stroke: `${colour} !important`,
+});
+
+/**
+ * All of these have the same specificity, so their order is what decides a note
+ * that is more than one of them: a judgement over what verovio could not place,
+ * what the reader has open over the judgement, and what is sounding over
+ * everything, because that lasts half a second and has to be seen.
+ */
 const scoreStyles = {
-    ".mlign-score .mlign-matched, .mlign-score .mlign-matched *": {
-        fill: `${MATCHED_COLOUR} !important`,
-        stroke: `${MATCHED_COLOUR} !important`,
-    },
-    ".mlign-score .mlign-unplayed, .mlign-score .mlign-unplayed *": {
-        fill: `${UNPLAYED_COLOUR} !important`,
-        stroke: `${UNPLAYED_COLOUR} !important`,
-    },
-    ".mlign-score .mlign-replaced, .mlign-score .mlign-replaced *": {
-        fill: `${REPLACED_COLOUR} !important`,
-        stroke: `${REPLACED_COLOUR} !important`,
-    },
-    ".mlign-score [data-perf-unaligned], .mlign-score [data-perf-unaligned] *": {
-        fill: `${UNPLAYED_COLOUR} !important`,
-        stroke: `${UNPLAYED_COLOUR} !important`,
-    },
-    // The divergence the reader has picked out, in the score and in the list
-    ".mlign-score .mlign-selected, .mlign-score .mlign-selected *": {
-        stroke: `${SELECTED_COLOUR} !important`,
-        fill: `${SELECTED_COLOUR} !important`,
-    },
+    ".mlign-score [data-perf-unaligned], .mlign-score [data-perf-unaligned] *":
+        ink(UNALIGNED_COLOUR),
+    ".mlign-score .mlign-matched, .mlign-score .mlign-matched *": ink(MATCHED_COLOUR),
+    ".mlign-score .mlign-unplayed, .mlign-score .mlign-unplayed *": ink(OMITTED_COLOUR),
+    // Not something the performer did: the recording simply does not reach here
+    ".mlign-score .mlign-outside, .mlign-score .mlign-outside *": ink(UNALIGNED_COLOUR),
+    ".mlign-score .mlign-replaced, .mlign-score .mlign-replaced *": ink(REPLACED_COLOUR),
+    ".mlign-score .mlign-selected, .mlign-score .mlign-selected *": ink(SELECTED_COLOUR),
+    ".mlign-score .note-playing, .mlign-score .note-playing *": ink(PLAYING_COLOUR),
 };
 
 /**
@@ -531,6 +545,16 @@ export default function MLignApp() {
             ].filter((id) => !replaced.has(id))
         );
 
+        // Beyond where the recording reaches is not something the performer did,
+        // and colouring it like an omission would say it was
+        const outside = new Set(
+            divergences.flatMap((divergence) =>
+                divergence.kind === "missing" && divergence.reading === "outside"
+                    ? divergence.scoreIds
+                    : []
+            )
+        );
+
         // Which divergence each note the recording disagreed about belongs to, so
         // that clicking one asks about it. The crosses carry this already; a
         // notehead is something verovio drew, so it has to be told here.
@@ -544,11 +568,12 @@ export default function MLignApp() {
 
         const paint = () => {
             for (const element of root.querySelectorAll(
-                ".mlign-matched, .mlign-unplayed, .mlign-replaced, .mlign-selected"
+                ".mlign-matched, .mlign-unplayed, .mlign-outside, .mlign-replaced, .mlign-selected"
             )) {
                 element.classList.remove(
                     "mlign-matched",
                     "mlign-unplayed",
+                    "mlign-outside",
                     "mlign-replaced",
                     "mlign-selected"
                 );
@@ -562,7 +587,7 @@ export default function MLignApp() {
                 const element = find(id);
                 if (!element) continue;
 
-                element.classList.add("mlign-unplayed");
+                element.classList.add(outside.has(id) ? "mlign-outside" : "mlign-unplayed");
                 const divergenceId = divergenceOfNote.get(id);
                 if (divergenceId) {
                     element.setAttribute("data-divergence", divergenceId);
@@ -648,6 +673,85 @@ export default function MLignApp() {
     }, [divergences, spans, resolutions]);
 
     /**
+     * The groups of written notes the recording passes over.
+     *
+     * Only groups: a single note that went unplayed has a notehead of its own to
+     * stand as, and the whole reason for a bracket is that a group of them has
+     * nowhere to stand. What is done with each group - whether its notes are
+     * legible where they are, or have to come out - is measured off the drawing.
+     */
+    const omissions = useMemo<OmittedGroup[]>(
+        () =>
+            divergences.flatMap((divergence) =>
+                divergence.kind === "missing" && divergence.scoreIds.length > 1
+                    ? [
+                          {
+                              divergenceId: divergence.id,
+                              scoreIds: divergence.scoreIds,
+                              resolved: resolutions.has(divergence.id),
+                              colour:
+                                  divergence.reading === "outside"
+                                      ? UNALIGNED_COLOUR
+                                      : OMITTED_COLOUR,
+                          },
+                      ]
+                    : []
+            ),
+        [divergences, resolutions]
+    );
+
+    /**
+     * The pedal of the same performance, so that listening back to it sounds
+     * like the recording rather than like the notes of it.
+     */
+    const pedals = useMemo<PlayablePedal[]>(() => {
+        if (!midi) return [];
+
+        return asSpans(midi, true).flatMap((span) =>
+            span.type === "note"
+                ? []
+                : [
+                      {
+                          type: span.type,
+                          onsetMs: span.onsetMs,
+                          durationMs: span.offsetMs - span.onsetMs,
+                      },
+                  ]
+        );
+    }, [midi]);
+
+    /** The written note each played note was matched to, for following by ear */
+    const matchedTo = useMemo(
+        () => new Map((result?.matches ?? []).map((match) => [match.performanceId, match.scoreId])),
+        [result]
+    );
+
+    /**
+     * What to light up while a played note sounds.
+     *
+     * The performance is what is being played, so the ids in the stream are the
+     * performed notes' own. A note that was matched lights the written note it
+     * was matched to; one that was not lights the cross drawn where it was
+     * played, which is the only mark on the page that is it.
+     */
+    const elementFor = useCallback(
+        (performanceId: string) => {
+            const root = scoreRef.current;
+            if (!root) return null;
+
+            const escape = (id: string) =>
+                typeof CSS?.escape === "function" ? CSS.escape(id) : id;
+            const scoreId = matchedTo.get(performanceId);
+            return scoreId
+                ? root.querySelector(`[data-id="${escape(scoreId)}"]`)
+                : root.querySelector(`[data-perf-id="${escape(performanceId)}"]`);
+        },
+        [matchedTo]
+    );
+
+    const playback = usePlayback({ notes: spans, pedals, elementFor });
+
+    /**
      * Open the question at the note it is about.
      *
      * Every divergence is somewhere in this score already - a cross where an
@@ -700,7 +804,12 @@ export default function MLignApp() {
 
         const after = undecided.filter((divergence) => divergence.id !== selected);
         for (const divergence of after) {
-            const element = root.querySelector(`[data-divergence="${divergence.id}"]`);
+            // Not a note that has been taken out and bracketed: it is still in the
+            // layout, so it would answer the query and then scroll nowhere and
+            // anchor the question to a point of no size
+            const element = root.querySelector(
+                `[data-divergence="${divergence.id}"]:not([data-omitted])`
+            );
             if (!element) continue;
 
             element.scrollIntoView({ block: "center", inline: "center" });
@@ -927,10 +1036,12 @@ export default function MLignApp() {
                             <Count
                                 value={result.deletions.length - replacedCount}
                                 label="notes not played"
+                                colour={OMITTED_COLOUR}
                             />
                             <Count
                                 value={result.insertions.length - replacedCount}
                                 label="notes not in the score"
+                                colour={EXTRA_COLOUR}
                             />
                             {replacedCount > 0 && (
                                 <Count
@@ -945,14 +1056,17 @@ export default function MLignApp() {
                             A note <strong>not played</strong> stands in the score but nothing in
                             the recording answers to it — a note the performer left out, one the
                             piano roll missed, or a passage the recording never reaches. Those
-                            notes are drawn in grey, near where they would have fallen.
+                            notes are drawn in red, near where they would have fallen. Where a
+                            whole passage was passed over there is no time for it to be drawn
+                            in, so it is bracketed instead and the bracket says how many notes
+                            are inside it.
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                             A note <strong>not in the score</strong> was played but has no note to
                             belong to. Most of them are not additions at all: an ornament sign
                             stands for its notes without writing them, so a written trill reaches
                             the aligner as one note and everything else the performer played
-                            reaches it as extra. Those are drawn as crosses where they were
+                            reaches it as extra. Those are drawn as green crosses where they were
                             played, and sorted out below.
                         </Typography>
                         {replacedCount > 0 && (
@@ -1000,6 +1114,23 @@ export default function MLignApp() {
 
                 {performed?.mei && (
                     <Box sx={{ overflowX: "auto" }}>
+                        {/*
+                          * Listening back is how the reader checks an alignment
+                          * they cannot check by looking: whether the notes light
+                          * up with the music is the whole answer.
+                          */}
+                        <Stack
+                            direction="row"
+                            spacing={2}
+                            sx={{ mb: 1, alignItems: "center", flexWrap: "wrap" }}
+                        >
+                            <PlaybackBar playback={playback} />
+                            <Typography variant="body2" color="text.secondary">
+                                Listen back, and the notes light up as they sound. Drag either
+                                end of the bar to hear one passage on its own.
+                            </Typography>
+                        </Stack>
+
                         <Stack direction="row" spacing={2} sx={{ mb: 1, alignItems: "center" }}>
                             <Chip
                                 size="small"
@@ -1009,7 +1140,7 @@ export default function MLignApp() {
                             <Chip
                                 size="small"
                                 label="not played"
-                                sx={{ backgroundColor: UNPLAYED_COLOUR }}
+                                sx={{ backgroundColor: OMITTED_COLOUR, color: "#ffffff" }}
                             />
                             <Chip
                                 size="small"
@@ -1017,6 +1148,14 @@ export default function MLignApp() {
                                 variant="outlined"
                                 sx={{ color: EXTRA_COLOUR, borderColor: EXTRA_COLOUR }}
                             />
+                            {omissions.length > 0 && (
+                                <Chip
+                                    size="small"
+                                    label="[ ] a passage passed over"
+                                    variant="outlined"
+                                    sx={{ color: OMITTED_COLOUR, borderColor: OMITTED_COLOUR }}
+                                />
+                            )}
                             {replacedCount > 0 && (
                                 <Chip
                                     size="small"
@@ -1089,6 +1228,7 @@ export default function MLignApp() {
                                 mei={performed.mei}
                                 extenders
                                 extraNotes={extraNotes}
+                                omissions={omissions}
                                 options={{
                                     performanceScale: scale,
                                     performanceRecording: performed.recording,

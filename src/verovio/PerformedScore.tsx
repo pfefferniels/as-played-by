@@ -3,10 +3,11 @@ import type { VerovioToolkit } from "verovio/esm";
 import { loadVerovio, renderPerformance, type ScoreOptions } from "./toolkit";
 import { clearExtenders, drawExtenders } from "./extenders";
 import { clearExtraNotes, drawExtraNotes, type ExtraNote } from "./extraNotes";
+import { clearOmissionMarks, drawOmissionMarks, type OmittedGroup } from "./omissionMarks";
 import { readPerformedNote, type PerformedNote } from "./performedNote";
 
 /** The classes this component draws with, which its observer must not react to. */
-const DRAWN = ["performanceExtender", "performanceExtraNote"];
+const DRAWN = ["performanceExtender", "performanceExtraNote", "performanceOmission"];
 
 const isOurs = (node: Node) =>
     node.nodeType === 1 && DRAWN.some((name) => (node as Element).classList?.contains(name));
@@ -25,6 +26,8 @@ interface PerformedScoreProps {
     extenders?: boolean;
     /** Played notes with no note in the score, drawn where they were played */
     extraNotes?: readonly ExtraNote[];
+    /** Written notes the recording passes over, bracketed where they are crowded */
+    omissions?: readonly OmittedGroup[];
     /** The key the extra notes are spelled in */
     tonic?: string;
     className?: string;
@@ -42,6 +45,7 @@ export const PerformedScore = ({
     onNoteHover,
     extenders,
     extraNotes,
+    omissions,
     tonic,
     className,
 }: PerformedScoreProps) => {
@@ -101,6 +105,12 @@ export const PerformedScore = ({
             if (extenders) drawExtenders(root, options);
             else clearExtenders(root);
 
+            // Before the crosses, which measure against the notes verovio placed:
+            // a bracketed group is taken out of sight but not out of the layout,
+            // so it still has a position to measure from
+            if (omissions?.length) drawOmissionMarks(root, omissions, options);
+            else clearOmissionMarks(root);
+
             if (extraNotes?.length) drawExtraNotes(root, extraNotes, { ...options, tonic });
             else clearExtraNotes(root);
         };
@@ -113,7 +123,7 @@ export const PerformedScore = ({
         });
         observer.observe(root, { childList: true, subtree: true });
         return () => observer.disconnect();
-    }, [pages, extenders, extraNotes, tonic, optionsKey]);
+    }, [pages, extenders, extraNotes, omissions, tonic, optionsKey]);
 
     const noteHandler = (
         handler?: (note: PerformedNote, element: SVGElement) => void

@@ -6,6 +6,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { PerformedScore } from '../src/verovio/PerformedScore'
 import type { PerformedNote } from '../src/verovio/performedNote'
+import type { OmittedGroup } from '../src/verovio/omissionMarks'
 import { unitsPerSecond } from '../src/verovio/toolkit'
 
 const mei = readFileSync(join(__dirname, '..', 'public', 'transcription.mei'), 'utf-8')
@@ -16,13 +17,14 @@ let root: Root
 const clicked: PerformedNote[] = []
 const hovered: PerformedNote[] = []
 
-async function show(extenders: boolean) {
+async function show(extenders: boolean, omissions?: OmittedGroup[]) {
   await act(async () => {
     root.render(
       <PerformedScore
         mei={mei}
         options={options}
         extenders={extenders}
+        omissions={omissions}
         onNoteClick={(note) => clicked.push(note)}
         onNoteHover={(note) => hovered.push(note)}
       />
@@ -141,6 +143,19 @@ describe('<PerformedScore>', () => {
   it('takes the extenders away again', async () => {
     await show(false)
     expect(container.querySelectorAll('.performanceExtender')).toHaveLength(0)
+  })
+
+  it('brackets a passage the recording passes over, and takes it away again', async () => {
+    const ids = [...container.querySelectorAll('.note')]
+      .slice(0, 4)
+      .map((note) => note.getAttribute('data-id')!)
+
+    await show(false, [{ divergenceId: 'missing-0', scoreIds: ids, resolved: false }])
+    expect(container.querySelectorAll('.performanceOmission').length).toBeGreaterThan(0)
+
+    await show(false)
+    expect(container.querySelectorAll('.performanceOmission')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-omitted]')).toHaveLength(0)
   })
 
   it('says nothing about a click that missed the notes', () => {
