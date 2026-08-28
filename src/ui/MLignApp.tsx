@@ -2,9 +2,6 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { read, type MidiFile } from "midifile-ts";
 import {
-    Accordion,
-    AccordionDetails,
-    AccordionSummary,
     Alert,
     Box,
     Button,
@@ -14,21 +11,24 @@ import {
     Paper,
     Slider,
     Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableRow,
     Typography,
 } from "@mui/material";
-import { ExpandMore } from "@mui/icons-material";
+import { Download } from "@mui/icons-material";
 import { asSpans, type NoteSpan } from "../performance/midiSpans";
-import { getNotesFromMEI } from "../score/scoreNotes";
+import { getNotesFromMEI, type ScoreNote } from "../score/scoreNotes";
 import { applyAlignment } from "../alignment/applyAlignment";
 import { PerformedScore } from "../verovio/PerformedScore";
 import { DEFAULT_PERFORMANCE_SCALE } from "../verovio/toolkit";
-import { pitchName } from "../performance/pitch";
+import type { ExtraNote } from "../verovio/extraNotes";
 import { chosenFile, readAsArrayBuffer, readAsText } from "./fileInput";
+import { divergencesOf } from "../alignment/divergences";
+import { ornamentSignsOf } from "../mei/ornamentSigns";
+import { addOrnamentSign, addPlayedNotes, markUnplayed } from "../mei/editScore";
+import {
+    DivergencePanel,
+    type Attribution,
+    type Resolution,
+} from "./DivergencePanel";
 import {
     MismatchedPairError,
     alignScoreToPerformance,
@@ -45,6 +45,9 @@ import {
 /** Matched noteheads, and the notes the recording never reached */
 const MATCHED_COLOUR = "#1d4ed8";
 const UNPLAYED_COLOUR = "#c9ced6";
+/** The played notes with no note in the score, drawn as crosses */
+const EXTRA_COLOUR = "#b45309";
+const SELECTED_COLOUR = "#dc2626";
 
 const scoreStyles = {
     ".mlign-score .mlign-matched, .mlign-score .mlign-matched *": {
@@ -58,6 +61,11 @@ const scoreStyles = {
     ".mlign-score [data-perf-unaligned], .mlign-score [data-perf-unaligned] *": {
         fill: `${UNPLAYED_COLOUR} !important`,
         stroke: `${UNPLAYED_COLOUR} !important`,
+    },
+    // The divergence the reader has picked out, in the score and in the list
+    ".mlign-score .mlign-selected, .mlign-score .mlign-selected *": {
+        stroke: `${SELECTED_COLOUR} !important`,
+        fill: `${SELECTED_COLOUR} !important`,
     },
 };
 
@@ -83,11 +91,6 @@ interface Status {
 
 function messageOf(reason: unknown): string {
     return reason instanceof Error ? reason.message : String(reason);
-}
-
-function timestamp(ms: number): string {
-    const seconds = ms / 1000;
-    return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
 }
 
 /**
@@ -171,6 +174,16 @@ export default function MLignApp() {
     const [minConfidence, setMinConfidence] = useState(0);
     const [sliderValue, setSliderValue] = useState(0);
     const [scale, setScale] = useState(DEFAULT_PERFORMANCE_SCALE);
+
+    /** The notes of the score, kept so divergences can be built from them */
+    const [scoreNotes, setScoreNotes] = useState<ScoreNote[]>([]);
+    /** What the reader has decided about each divergence */
+    const [resolutions, setResolutions] = useState<Map<string, Resolution>>(new Map());
+    const [attribution, setAttribution] = useState<Attribution>({
+        resp: "",
+        certainty: "medium",
+    });
+    const [selected, setSelected] = useState<string>();
 
     const scoreRef = useRef<HTMLDivElement>(null);
 
@@ -264,6 +277,9 @@ export default function MLignApp() {
         setMismatch(undefined);
         setNotices([]);
         setHidden(new Set());
+        setScoreNotes([]);
+        setResolutions(new Map());
+        setSelected(undefined);
     };
 
     /**
@@ -290,7 +306,9 @@ export default function MLignApp() {
             // Verovio reads the whole score in one synchronous stretch, so the
             // status line has to reach the screen before it starts
             await new Promise((resolve) => setTimeout(resolve, 0));
-            const scoreNotes = await readScore(mei);
+            const notes = await readScore(mei);
+            setScoreNotes(notes);
+            const scoreNotes = notes;
             const spans = asSpans(midi, true).filter(
                 (span): span is NoteSpan => span.type === "note"
             );
@@ -383,11 +401,47 @@ export default function MLignApp() {
         }
     };
 
+    const spans = useMemo(
+        () =>
+            midi
+                ? asSpans(midi, true).filter((span): span is NoteSpan => span.type === "note")
+                : [],
+        [midi]
+    );
+
+    /**
+     * The disagreements, grouped into the things they actually are.
+     *
+     * The ornament signs are read from the score for this and nothing else: a run
+     * of played notes against a note the score already puts a trill on is that
+     * trill being performed, not notes the performer added, and no amount of
+     * looking at the played notes alone can tell the difference.
+     */
+    const divergences = useMemo(() => {
+        if (!mei || !result) return [];
+
+        return divergencesOf(
+            {
+                matches: result.matches,
+                deletions: result.deletions,
+                insertions: result.insertions,
+                scoreNotes,
+                spans,
+                signs: ornamentSignsOf(mei),
+            },
+            { hasRepeats: hasRepeatSigns(mei) }
+        );
+    }, [mei, result, scoreNotes, spans]);
+
     /**
      * The score is laid out from the <when> elements, so the matching is written
      * into the MEI before it is rendered. `applyAlignment` appends its recording
      * after any the document already carried, and verovio lays out the first one
      * unless it is told otherwise — hence the explicit index.
+     *
+     * The divergences go into the same recording. The fork ignores a <when> it
+     * cannot resolve, so they change nothing about the layout and everything
+     * about what survives being saved.
      */
     const performed = useMemo(() => {
         if (!mei || !midi || !result) return undefined;
@@ -396,7 +450,19 @@ export default function MLignApp() {
             (pair) => !hidden.has(pair.score_id)
         );
         try {
-            const aligned = applyAlignment(mei, midi, pairs);
+            const aligned = applyAlignment(mei, midi, pairs, {
+                divergences,
+                resolutions: new Map(
+                    [...resolutions].map(([id, resolution]) => [
+                        id,
+                        {
+                            reading: resolution.reading,
+                            resp: attribution.resp || undefined,
+                            certainty: attribution.certainty,
+                        },
+                    ])
+                ),
+            });
             const recordings = aligned.match(/<recording\b/g)?.length ?? 1;
             return { mei: aligned, recording: String(recordings), failed: undefined };
         } catch (reason: unknown) {
@@ -408,7 +474,7 @@ export default function MLignApp() {
                 failed: `The alignment could not be written into the score. ${messageOf(reason)}`,
             };
         }
-    }, [mei, midi, result, minConfidence, hidden]);
+    }, [mei, midi, result, minConfidence, hidden, divergences, resolutions, attribution]);
 
     /**
      * Colour the noteheads once the pages are in the document. The score arrives
@@ -439,9 +505,13 @@ export default function MLignApp() {
                 .map((match) => match.scoreId),
         ]);
 
+        const chosen = divergences.find((divergence) => divergence.id === selected);
+
         const paint = () => {
-            for (const element of root.querySelectorAll(".mlign-matched, .mlign-unplayed")) {
-                element.classList.remove("mlign-matched", "mlign-unplayed");
+            for (const element of root.querySelectorAll(
+                ".mlign-matched, .mlign-unplayed, .mlign-selected"
+            )) {
+                element.classList.remove("mlign-matched", "mlign-unplayed", "mlign-selected");
             }
             const find = (id: string) =>
                 root.querySelector(
@@ -449,6 +519,24 @@ export default function MLignApp() {
                 );
             for (const id of matched) find(id)?.classList.add("mlign-matched");
             for (const id of unplayed) find(id)?.classList.add("mlign-unplayed");
+
+            // The divergence picked out in the list, so that choosing a row says
+            // where in the music it is
+            if (chosen) {
+                const ids =
+                    chosen.kind === "added"
+                        ? chosen.anchorId
+                            ? [chosen.anchorId]
+                            : []
+                        : chosen.scoreIds;
+                for (const id of ids) find(id)?.classList.add("mlign-selected");
+
+                for (const cross of root.querySelectorAll(
+                    `[data-divergence="${chosen.id}"]`
+                )) {
+                    cross.classList.add("mlign-selected");
+                }
+            }
 
             // The score is what the last stage was waiting for — or the <p>
             // <PerformedScore> puts there instead when verovio refuses the
@@ -460,24 +548,100 @@ export default function MLignApp() {
         const observer = new MutationObserver(paint);
         observer.observe(root, { childList: true, subtree: true });
         return () => observer.disconnect();
-    }, [performed, result, minConfidence, hidden]);
+    }, [performed, result, minConfidence, hidden, divergences, selected]);
 
-    const spans = useMemo(
-        () =>
-            midi
-                ? asSpans(midi, true).filter((span): span is NoteSpan => span.type === "note")
-                : [],
-        [midi]
-    );
-
-    const insertions = useMemo(() => {
-        if (!result) return [];
+    /** The extra notes to draw, each carrying the divergence a click selects */
+    const extraNotes = useMemo<ExtraNote[]>(() => {
         const byId = new Map(spans.map((span) => [span.id, span]));
-        return result.insertions
-            .map((insertion) => byId.get(insertion.performanceId))
-            .filter((span): span is NoteSpan => span !== undefined)
-            .sort((a, b) => a.onsetMs - b.onsetMs);
-    }, [result, spans]);
+
+        return divergences.flatMap((divergence) =>
+            divergence.kind === "added"
+                ? divergence.perfIds.flatMap((perfId) => {
+                      const span = byId.get(perfId);
+                      if (!span) return [];
+                      return [
+                          {
+                              id: span.id,
+                              divergenceId: divergence.id,
+                              onsetMs: span.onsetMs,
+                              offsetMs: span.offsetMs,
+                              pitch: span.pitch,
+                              resolved: resolutions.has(divergence.id),
+                          },
+                      ];
+                  })
+                : []
+        );
+    }, [divergences, spans, resolutions]);
+
+    /**
+     * Carry out the decisions that change the notation.
+     *
+     * Only these three do: everything else is a fact about the recording, which
+     * is already written into it. The edited score replaces the one on the page,
+     * so the next alignment sees the notes just added - which is what makes a
+     * written-in note match rather than turn up as an addition all over again.
+     */
+    const applyToScore = () => {
+        if (!mei) return;
+
+        const doc = new DOMParser().parseFromString(mei, "application/xml");
+        const byId = new Map(spans.map((span) => [span.id, span]));
+        const who = { resp: attribution.resp || undefined, certainty: attribution.certainty };
+        const tonic = "C";
+        let changed = 0;
+
+        for (const divergence of divergences) {
+            const action = resolutions.get(divergence.id)?.action;
+            if (!action || action === "record" || action === "ignore") continue;
+
+            if (divergence.kind === "added" && divergence.anchorId) {
+                if (action === "add-sign") {
+                    if (addOrnamentSign(doc, divergence.anchorId, "trill", who)) changed++;
+                } else if (action === "write-notes") {
+                    const played = divergence.perfIds
+                        .map((id) => byId.get(id))
+                        .filter((span): span is NoteSpan => span !== undefined);
+                    const reason =
+                        divergence.reading === "added-octave" ||
+                        divergence.reading === "fuller-chord" ||
+                        divergence.reading === "ornamentation"
+                            ? divergence.reading
+                            : "unknown";
+                    if (addPlayedNotes(doc, divergence.anchorId, played, reason, tonic, who)) {
+                        changed++;
+                    }
+                }
+            } else if (divergence.kind === "missing" && action === "mark-simplification") {
+                if (markUnplayed(doc, divergence.scoreIds, who)) changed++;
+            }
+        }
+
+        if (changed === 0) {
+            setError("None of those decisions could be written into this score.");
+            return;
+        }
+
+        setMEI(new XMLSerializer().serializeToString(doc));
+        setNotices([
+            `${changed} decision${changed === 1 ? "" : "s"} written into the score. ` +
+                `Align again to see how the new notation matches.`,
+        ]);
+        setResolutions(new Map());
+    };
+
+    const download = () => {
+        if (!performed?.mei) return;
+
+        const url = URL.createObjectURL(
+            new Blob([performed.mei], { type: "application/xml" })
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = (meiName ?? "score").replace(/\.[^.]+$/, "") + "-aligned.mei";
+        link.click();
+        URL.revokeObjectURL(url);
+    };
 
     const busy = status !== undefined;
     const filteredOut = result
@@ -521,6 +685,17 @@ export default function MLignApp() {
                     >
                         {result ? "Align again" : "Align"}
                     </Button>
+
+                    {performed?.mei && (
+                        <Button
+                            variant="outlined"
+                            startIcon={<Download />}
+                            onClick={download}
+                            disabled={busy}
+                        >
+                            Download MEI
+                        </Button>
+                    )}
 
                     {result && (
                         <>
@@ -612,9 +787,11 @@ export default function MLignApp() {
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                             A note <strong>not in the score</strong> was played but has no note to
-                            belong to — an ornament that is not written out, an added bass, or a
-                            repeat the engraving shows only once. It has nowhere to go in the
-                            score and is listed below instead.
+                            belong to. Most of them are not additions at all: an ornament sign
+                            stands for its notes without writing them, so a written trill reaches
+                            the aligner as one note and everything else the performer played
+                            reaches it as extra. Those are drawn as crosses where they were
+                            played, and sorted out below.
                         </Typography>
 
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
@@ -646,36 +823,19 @@ export default function MLignApp() {
                     </Paper>
                 )}
 
-                {insertions.length > 0 && (
-                    <Accordion variant="outlined" sx={{ maxWidth: "48rem" }}>
-                        <AccordionSummary expandIcon={<ExpandMore />}>
-                            {insertions.length} played notes with no note in the score
-                        </AccordionSummary>
-                        <AccordionDetails sx={{ maxHeight: "20rem", overflow: "auto" }}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Time</TableCell>
-                                        <TableCell>Pitch</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {insertions.slice(0, 200).map((span) => (
-                                        <TableRow key={span.id}>
-                                            <TableCell>{timestamp(span.onsetMs)}</TableCell>
-                                            <TableCell>{pitchName(span.pitch)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                            {insertions.length > 200 && (
-                                <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                                    and {insertions.length - 200} more
-                                </Typography>
-                            )}
-                        </AccordionDetails>
-                    </Accordion>
-                )}
+                <DivergencePanel
+                    divergences={divergences}
+                    resolutions={resolutions}
+                    onResolve={(id, resolution) =>
+                        setResolutions((previous) => new Map(previous).set(id, resolution))
+                    }
+                    attribution={attribution}
+                    onAttribution={setAttribution}
+                    selected={selected}
+                    onSelect={setSelected}
+                    onApply={applyToScore}
+                    applying={busy}
+                />
 
                 {performed?.failed && <Alert severity="error">{performed.failed}</Alert>}
 
@@ -692,6 +852,12 @@ export default function MLignApp() {
                                 label="not played"
                                 sx={{ backgroundColor: UNPLAYED_COLOUR }}
                             />
+                            <Chip
+                                size="small"
+                                label="✕ played, not in the score"
+                                variant="outlined"
+                                sx={{ color: EXTRA_COLOUR, borderColor: EXTRA_COLOUR }}
+                            />
                         </Stack>
 
                         <div ref={scoreRef}>
@@ -699,6 +865,10 @@ export default function MLignApp() {
                                 className="mlign-score"
                                 mei={performed.mei}
                                 extenders
+                                extraNotes={extraNotes}
+                                onExtraNoteClick={(id) =>
+                                    setSelected((current) => (current === id ? undefined : id))
+                                }
                                 options={{
                                     performanceScale: scale,
                                     performanceRecording: performed.recording,

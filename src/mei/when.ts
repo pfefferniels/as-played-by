@@ -1,4 +1,6 @@
-import { AnySpan } from "../performance/midiSpans";
+import { AnySpan, NoteSpan } from "../performance/midiSpans";
+
+const MEI_NS = "http://www.music-encoding.org/ns/mei";
 
 export const insertRecording = (newMEI: Document, source?: string) => {
     let recording = source
@@ -63,3 +65,111 @@ export const insertWhen = (newMEI: Document, recording: Element, midiSpan: AnySp
     when.appendChild(onsetTicks);
     when.appendChild(durationTicks);
 };
+
+/** One <extData type="..."> child, which is how a <when> carries anything extra. */
+const extData = (doc: Document, when: Element, type: string, value: string) => {
+    const element = doc.createElementNS(MEI_NS, "extData");
+    element.setAttribute("type", type);
+    element.textContent = value;
+    when.appendChild(element);
+};
+
+/**
+ * What the reader made of a divergence, written alongside it.
+ *
+ * Kept apart from the measured facts - a reading is a judgement, and it carries
+ * who made it and how sure they were, in the same terms the rest of the project
+ * uses for editorial decisions (see ../ui/CreateReading).
+ */
+export interface WhenReading {
+    reading: string;
+    resp?: string;
+    certainty?: string;
+}
+
+/**
+ * A played note with no note in the score.
+ *
+ * It has no `@data`, because there is nothing in the score for it to point at -
+ * that absence is the whole content of the record. Everything needed to find the
+ * note again, or to draw it, is carried in `<extData>`.
+ *
+ * The ornament fields are espressivo's own names for the same facts
+ * (`ornament.anchor`, `ornament.slot`, `ornament.pass`; see its PARITY.md §6.4).
+ * espressivo writes them when it *generates* an ornament's notes from a score;
+ * this writes them when we have *recognised* those notes in a recording. Using
+ * one vocabulary for both directions is what will let an MPM v3 ornament be
+ * fitted from these records later without reshaping anything.
+ */
+export const insertInsertionWhen = (
+    doc: Document,
+    recording: Element,
+    span: NoteSpan,
+    extra: {
+        confidence?: number;
+        ornamentAnchor?: string | null;
+        ornamentSlot?: number;
+        reading?: WhenReading;
+    } = {}
+) => {
+    const when = doc.createElementNS(MEI_NS, "when");
+    recording.appendChild(when);
+
+    when.setAttribute("absolute", span.onsetMs.toFixed(0) + "ms");
+    when.setAttribute("abstype", "smil");
+    when.setAttribute("corresp", span.link || span.id);
+    when.setAttribute("type", "insertion");
+
+    extData(doc, when, "pitch", span.pitch.toString());
+    extData(doc, when, "velocity", span.velocity.toString());
+    extData(doc, when, "duration", (span.offsetMs - span.onsetMs).toFixed(0) + "ms");
+    extData(doc, when, "onsetTicks", span.onset.toString());
+    extData(doc, when, "durationTicks", (span.offset - span.onset).toString());
+
+    if (extra.confidence !== undefined) {
+        extData(doc, when, "confidence", extra.confidence.toFixed(3));
+    }
+    if (extra.ornamentAnchor) {
+        extData(doc, when, "ornamentAnchor", "#" + extra.ornamentAnchor);
+    }
+    if (extra.ornamentSlot !== undefined) {
+        extData(doc, when, "ornamentSlot", extra.ornamentSlot.toString());
+    }
+
+    applyReading(doc, when, extra.reading);
+};
+
+/**
+ * A written note the recording never played.
+ *
+ * The mirror of an insertion: it has `@data` and no `@absolute`, because there is
+ * a note but no moment. Both shapes were checked against the vendored fork before
+ * being written into the recording it lays a score out from - it ignores a <when>
+ * it cannot resolve, and every notehead stays exactly where it was.
+ */
+export const insertDeletionWhen = (
+    doc: Document,
+    recording: Element,
+    scoreId: string,
+    extra: { confidence?: number; reading?: WhenReading } = {}
+) => {
+    const when = doc.createElementNS(MEI_NS, "when");
+    recording.appendChild(when);
+
+    when.setAttribute("data", "#" + scoreId);
+    when.setAttribute("type", "deletion");
+
+    if (extra.confidence !== undefined) {
+        extData(doc, when, "confidence", extra.confidence.toFixed(3));
+    }
+
+    applyReading(doc, when, extra.reading);
+};
+
+function applyReading(doc: Document, when: Element, reading?: WhenReading) {
+    if (!reading) return;
+
+    extData(doc, when, "reading", reading.reading);
+    if (reading.resp) extData(doc, when, "resp", reading.resp);
+    if (reading.certainty) extData(doc, when, "certainty", reading.certainty);
+}

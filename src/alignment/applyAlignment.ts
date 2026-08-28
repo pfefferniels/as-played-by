@@ -2,8 +2,24 @@ import type { MidiFile } from "midifile-ts";
 import { asSpans } from "../performance/midiSpans";
 import { insertMetadata, parseMetadata } from "../mei/insertMetadata";
 import { insertPedals } from "../mei/insertPedals";
-import { insertRecording, insertWhen } from "../mei/when";
+import {
+    insertDeletionWhen,
+    insertInsertionWhen,
+    insertRecording,
+    insertWhen,
+} from "../mei/when";
 import type { Match } from "./types";
+import type { Divergence } from "./divergences";
+
+/** What the reader decided about each divergence, keyed by its id. */
+export type Resolutions = ReadonlyMap<string, { reading: string; resp?: string; certainty?: string }>;
+
+export interface AlignmentExtras {
+    /** The disagreements, so that they survive the document rather than the page */
+    divergences?: readonly Divergence[];
+    /** Readings the reader has confirmed or overruled */
+    resolutions?: Resolutions;
+}
 
 /**
  * Write a matching of the score against a MIDI recording into the MEI, as the
@@ -12,11 +28,18 @@ import type { Match } from "./types";
  * This is what the score is laid out from, so the editor renders the result of
  * this while aligning and only writes the very same document back when the
  * alignment is finalized.
+ *
+ * Where divergences are given they are written into the same <recording>, as
+ * <when>s with no `@data` (a played note with no note in the score) or no
+ * `@absolute` (a written note that was never played). The fork ignores both -
+ * checked against it before this was written - so the layout is unaffected and
+ * the disagreements stop dying with the page.
  */
 export function applyAlignment(
     mei: string,
     midi: MidiFile,
-    pairs: Match[]
+    pairs: Match[],
+    extras: AlignmentExtras = {}
 ): string {
     const meiDoc = new DOMParser().parseFromString(mei, "application/xml");
 
@@ -29,10 +52,11 @@ export function applyAlignment(
     }
 
     const spans = asSpans(midi, true);
+    const spanById = new Map(spans.map((span) => [span.id, span]));
     const unknown: string[] = [];
 
     for (const pair of pairs) {
-        const span = spans.find((span) => span.id === pair.performance_id);
+        const span = spanById.get(pair.performance_id);
         if (!span) continue;
 
         // A <when> may only point at an element the document holds. Verovio hands
@@ -51,6 +75,33 @@ export function applyAlignment(
         console.warn(
             `Left out ${unknown.length} match(es) against elements the MEI does not contain, such as '${unknown[0]}'`
         );
+    }
+
+    for (const divergence of extras.divergences ?? []) {
+        const resolution = extras.resolutions?.get(divergence.id);
+        const reading = { reading: resolution?.reading ?? divergence.reading, ...resolution };
+
+        if (divergence.kind === "added") {
+            divergence.perfIds.forEach((perfId, slot) => {
+                const span = spanById.get(perfId);
+                if (!span || span.type !== "note") return;
+
+                insertInsertionWhen(meiDoc, recording, span, {
+                    confidence: divergence.confidence,
+                    ornamentAnchor: divergence.anchorId,
+                    ornamentSlot: slot,
+                    reading,
+                });
+            });
+        } else {
+            for (const scoreId of divergence.scoreIds) {
+                if (!meiDoc.querySelector(`[*|id="${scoreId}"]`)) continue;
+                insertDeletionWhen(meiDoc, recording, scoreId, {
+                    confidence: divergence.confidence,
+                    reading,
+                });
+            }
+        }
     }
 
     insertPedals(

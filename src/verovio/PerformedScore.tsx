@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { VerovioToolkit } from "verovio/esm";
 import { loadVerovio, renderPerformance, type ScoreOptions } from "./toolkit";
 import { clearExtenders, drawExtenders } from "./extenders";
+import { clearExtraNotes, drawExtraNotes, type ExtraNote } from "./extraNotes";
 import { readPerformedNote, type PerformedNote } from "./performedNote";
 
 interface PerformedScoreProps {
@@ -12,6 +13,11 @@ interface PerformedScoreProps {
     onNoteHover?: (note: PerformedNote, element: SVGElement) => void;
     /** Draw a line from each notehead to the point the note was released at */
     extenders?: boolean;
+    /** Played notes with no note in the score, drawn where they were played */
+    extraNotes?: readonly ExtraNote[];
+    /** The key the extra notes are spelled in */
+    tonic?: string;
+    onExtraNoteClick?: (divergenceId: string) => void;
     className?: string;
 }
 
@@ -26,6 +32,9 @@ export const PerformedScore = ({
     onNoteClick,
     onNoteHover,
     extenders,
+    extraNotes,
+    tonic,
+    onExtraNoteClick,
     className,
 }: PerformedScoreProps) => {
     const [pages, setPages] = useState<string[]>([]);
@@ -72,6 +81,18 @@ export const PerformedScore = ({
         else clearExtenders(container.current);
     }, [pages, extenders, optionsKey]);
 
+    // The same for the played notes with no note in the score: they are measured
+    // from notes verovio has placed, so they can only be drawn once it has
+    useLayoutEffect(() => {
+        if (!container.current) return;
+
+        if (extraNotes?.length) {
+            drawExtraNotes(container.current, extraNotes, { ...JSON.parse(optionsKey), tonic });
+        } else {
+            clearExtraNotes(container.current);
+        }
+    }, [pages, extraNotes, tonic, optionsKey]);
+
     const noteHandler = (
         handler?: (note: PerformedNote, element: SVGElement) => void
     ) => {
@@ -95,7 +116,19 @@ export const PerformedScore = ({
             // Sized to the music rather than to the viewport, so that a score wider
             // than the window is scrolled to rather than cut off
             style={{ width: "max-content", opacity: rendering ? 0.5 : 1 }}
-            onClick={noteHandler(onNoteClick)}
+            onClick={(event) => {
+                // An extra note is not a .note, so it is caught before the
+                // handler that reads one
+                const extra = (event.target as Element).closest?.(
+                    "[data-divergence]"
+                );
+                const id = extra?.getAttribute("data-divergence");
+                if (id && onExtraNoteClick) {
+                    onExtraNoteClick(id);
+                    return;
+                }
+                noteHandler(onNoteClick)?.(event);
+            }}
             onMouseOver={noteHandler(onNoteHover)}
         >
             {pages.map((page, index) => (

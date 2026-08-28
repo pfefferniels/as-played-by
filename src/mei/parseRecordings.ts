@@ -7,11 +7,33 @@ export interface PedalEvent {
     durationMs: number;
 }
 
+/**
+ * A disagreement read back out of a <recording>.
+ *
+ * The counterpart of what ../alignment/applyAlignment writes: an insertion has a
+ * moment and no note, a deletion a note and no moment. Reading them back is what
+ * makes a review survive being saved and reopened.
+ */
+export interface RecordedDivergence {
+    kind: "insertion" | "deletion";
+    /** The played note, for an insertion */
+    span?: NoteSpan;
+    /** The written note, for a deletion */
+    scoreId?: string;
+    confidence?: number;
+    reading?: string;
+    resp?: string;
+    certainty?: string;
+    ornamentAnchor?: string;
+    ornamentSlot?: number;
+}
+
 export interface RecordingInfo {
     source: string;
     label: string;
     noteSpans: Map<string, NoteSpan>;
     pedalEvents: PedalEvent[];
+    divergences: RecordedDivergence[];
 }
 
 /** The accidental of a note, whether written on it or on a child <accid> */
@@ -57,12 +79,10 @@ export function parseRecordings(mei: string): {
 
         const noteSpans = new Map<string, NoteSpan>();
         const pedalEvents: PedalEvent[] = [];
+        const divergences: RecordedDivergence[] = [];
 
         for (const when of recEl.getElementsByTagNameNS(ns, "when")) {
             const absoluteAttr = when.getAttribute("absolute");
-            if (!absoluteAttr) continue;
-            const onsetMs = parseInt(absoluteAttr, 10);
-
             const dataAttr = when.getAttribute("data");
             const type = when.getAttribute("type");
 
@@ -71,6 +91,13 @@ export function parseRecordings(mei: string): {
             let durationMs = 0;
             let onsetTicks = 0;
             let durationTicks = 0;
+            let pitch: number | undefined;
+            let confidence: number | undefined;
+            let reading: string | undefined;
+            let resp: string | undefined;
+            let certainty: string | undefined;
+            let ornamentAnchor: string | undefined;
+            let ornamentSlot: number | undefined;
 
             for (let i = 0; i < extDatas.length; i++) {
                 const ext = extDatas[i];
@@ -78,10 +105,57 @@ export function parseRecordings(mei: string): {
                 const text = ext.textContent || "";
                 if (etype === "velocity") velocity = parseInt(text, 10);
                 else if (etype === "duration") durationMs = parseInt(text, 10);
-                else if (etype === "onsetTicks")
-                    onsetTicks = parseInt(text, 10);
-                else if (etype === "durationTicks")
-                    durationTicks = parseInt(text, 10);
+                else if (etype === "onsetTicks") onsetTicks = parseInt(text, 10);
+                else if (etype === "durationTicks") durationTicks = parseInt(text, 10);
+                else if (etype === "pitch") pitch = parseInt(text, 10);
+                else if (etype === "confidence") confidence = parseFloat(text);
+                else if (etype === "reading") reading = text;
+                else if (etype === "resp") resp = text;
+                else if (etype === "certainty") certainty = text;
+                else if (etype === "ornamentAnchor") ornamentAnchor = text.replace(/^#/, "");
+                else if (etype === "ornamentSlot") ornamentSlot = parseInt(text, 10);
+            }
+
+            // A written note that was never played: a note and no moment.
+            if (type === "deletion" && dataAttr) {
+                divergences.push({
+                    kind: "deletion",
+                    scoreId: dataAttr.replace(/^#/, ""),
+                    confidence,
+                    reading,
+                    resp,
+                    certainty,
+                });
+                continue;
+            }
+
+            if (!absoluteAttr) continue;
+            const onsetMs = parseInt(absoluteAttr, 10);
+
+            // A played note with no note in the score: a moment and no note.
+            if (type === "insertion") {
+                const id = when.getAttribute("corresp") || "";
+                divergences.push({
+                    kind: "insertion",
+                    span: {
+                        type: "note",
+                        id,
+                        onset: onsetTicks,
+                        offset: onsetTicks + durationTicks,
+                        onsetMs,
+                        offsetMs: onsetMs + durationMs,
+                        pitch: pitch ?? 0,
+                        velocity,
+                        channel: 0,
+                    },
+                    confidence,
+                    reading,
+                    resp,
+                    certainty,
+                    ornamentAnchor,
+                    ornamentSlot,
+                });
+                continue;
             }
 
             if (dataAttr) {
@@ -104,7 +178,7 @@ export function parseRecordings(mei: string): {
             }
         }
 
-        recordings.push({ source, label, noteSpans, pedalEvents });
+        recordings.push({ source, label, noteSpans, pedalEvents, divergences });
     }
 
     return { recordings, pitchMap };
