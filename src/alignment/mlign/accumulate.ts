@@ -4,7 +4,7 @@
  * The exported graph stops at the encoder, so the bilinear match, the null
  * logits and the overlap bookkeeping all live here. Reference implementation:
  * `MLign/src/mlign/infer.py::accumulate_logits`; the head itself is the `head`
- * block of `mlign-v2-fp16.onnx.json`.
+ * block of the model's `.onnx.json` sidecar.
  *
  * Only *types* are imported from `session.ts`, and `featurize.ts` is pure, so
  * this module pulls in no onnxruntime code: the one thing here that needs a
@@ -76,9 +76,17 @@ function windowHead(out: EncoderOutput): {
  *
  * Its scale is `attr_scale`, not `scale`: the head was given a temperature of
  * its own so that attribution gradients could never retune the match head's.
+ *
+ * `gate` comes back only from a `"factored"` graph, and it is read here rather
+ * than computed: it is a per-token output, not a dot product. Everything on this
+ * side of the head stays *raw*. The factoring that turns these three into a
+ * distribution is a nonlinear function of a whole accumulated row and belongs
+ * after the averaging, in `attribution.ts`, not per window.
  */
-function windowAttribution(out: EncoderOutput): { attr: Float32Array; none: Float32Array } | undefined {
-    const { n, m, T, attrS, attrP, attrNone, attrScale } = out;
+function windowAttribution(
+    out: EncoderOutput
+): { attr: Float32Array; none: Float32Array; gate?: Float32Array } | undefined {
+    const { n, m, T, attrS, attrP, attrNone, attrScale, attrGate } = out;
     if (!attrS || !attrP || !attrNone || attrScale === undefined) return undefined;
 
     const d = attrS.length / T;
@@ -101,7 +109,12 @@ function windowAttribution(out: EncoderOutput): { attr: Float32Array; none: Floa
         none[j] = Math.fround(dot * attrScale);
     }
 
-    return { attr, none };
+    if (!attrGate) return { attr, none };
+
+    const gate = new Float32Array(m);
+    for (let j = 0; j < m; j++) gate[j] = attrGate[2 + n + j];
+
+    return { attr, none, gate };
 }
 
 /**
@@ -147,6 +160,13 @@ export async function accumulateLogits(
     // so `cnt` and `nullPCnt` already say how many times each was written to.
     const attr = wantAttribution ? new Float32Array(m * n) : undefined;
     const attrNone = wantAttribution ? new Float32Array(m) : undefined;
+    // v3's gate, one number per played note, averaged over windows exactly as
+    // `nullP` is. Its presence is what tells `attribution.ts` which mode to read
+    // the row in, so it is allocated only for a graph that really emits it.
+    const attrGate =
+        wantAttribution && session.attrConditioned === "factored"
+            ? new Float32Array(m)
+            : undefined;
 
     for (let w = 0; w < windows.length; w++) {
         const win = windows[w];
@@ -200,6 +220,7 @@ export async function accumulateLogits(
                     attr[attrOff + i] += attribution.attr[blockOff + i];
                 }
                 attrNone[p0 + j] += attribution.none[j];
+                if (attrGate && attribution.gate) attrGate[p0 + j] += attribution.gate[j];
             }
         }
 
@@ -227,8 +248,11 @@ export async function accumulateLogits(
                 attr[attrOff + i] = times === 0 ? UNCOVERED_SIM : attr[attrOff + i] / times;
             }
             attrNone[j] = nullPCnt[j] === 0 ? UNCOVERED_SIM : attrNone[j] / nullPCnt[j];
+            if (attrGate) {
+                attrGate[j] = nullPCnt[j] === 0 ? UNCOVERED_SIM : attrGate[j] / nullPCnt[j];
+            }
         }
     }
 
-    return { n, m, sim, nullS, nullP, attr, attrNone };
+    return { n, m, sim, nullS, nullP, attr, attrNone, attrGate };
 }

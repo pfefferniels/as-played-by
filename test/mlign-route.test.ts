@@ -329,6 +329,7 @@ describe('the ids the matches come back with', () => {
         }
       },
       hasAttribution: false,
+      attrConditioned: 'none',
       async release() {},
     }
     return { session, feeds }

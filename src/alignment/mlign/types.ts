@@ -50,6 +50,24 @@ export interface MlignRow {
 export type Window = readonly [s0: number, s1: number, p0: number, p1: number];
 
 /**
+ * How the attribution head's row is put together, which differs by checkpoint.
+ *
+ * `"none"` is the head as v1 and v2 export it: the row is `[attr | attr_none]`
+ * raw, and reading it means softmaxing it.
+ *
+ * `"factored"` is v3. The row is rebuilt from three factors — is this played
+ * note an insertion at all, does that insertion elaborate a written note, and
+ * which one — and comes out *already normalized*, so it is exponentiated rather
+ * than softmaxed. The first factor is the match head's, which is why the
+ * conditioning needs the accumulated `sim` / `nullP` and cannot live in the
+ * graph. See `attribution.ts`.
+ *
+ * Detected from the graph's own outputs (`attr_gate` present means factored),
+ * never from the file name.
+ */
+export type AttrConditioned = "none" | "factored";
+
+/**
  * The model's accumulated output for a whole piece.
  *
  * `sim` is row-major `(n, m)`. Cells no window covered hold `UNCOVERED_SIM`, and
@@ -61,6 +79,11 @@ export type Window = readonly [s0: number, s1: number, p0: number, p1: number];
  * distribution over written notes for each played one — and `attrNone` is its
  * "not an ornament" column, kept beside it rather than as an `n + 1`th entry so
  * that the matrix stays a plain transpose of the score/performance grid.
+ *
+ * `attrGate` is v3's third quantity, one logit per played note, and its presence
+ * is what says the row must be built the `"factored"` way. It is the raw
+ * accumulated gate: the conditioning is a nonlinear function of a whole row and
+ * so is applied once, after the windows have been averaged, by `attribution.ts`.
  */
 export interface SimBundle {
     n: number;
@@ -70,6 +93,7 @@ export interface SimBundle {
     nullP: Float32Array;
     attr?: Float32Array;
     attrNone?: Float32Array;
+    attrGate?: Float32Array;
 }
 
 /** An alignment triple over table indices, as `decode` emits them. */
@@ -104,6 +128,18 @@ export const WIN_STRIDE = WIN_SCORE >> 1;
 export const MARGIN_SEC = 3.0;
 export const UNCOVERED_SIM = -1e9;
 export const UNCOVERED_NULL = 1e9;
+/**
+ * The floor on the two match-head terms of a `"factored"` attribution row —
+ * `NoteAligner.LOG_FLOOR` in the Python, and part of the model contract rather
+ * than a taste of this port's.
+ *
+ * Without it a match head that is certain contributes an unbounded term: a
+ * played note the alignment is sure it matched sends `log P(insertion)` to
+ * minus infinity, and with it the whole ornament side of the row, so the
+ * ranking underneath — which is the part worth having — would be lost to a
+ * number the head was never asked about.
+ */
+export const LOG_FLOOR = -12.0;
 export const ANCHOR_CONF = 0.35;
 export const TOL_SEC = 1.0;
 export const SKIP_FACTOR = 0.6;

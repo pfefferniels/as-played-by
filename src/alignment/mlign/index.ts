@@ -19,9 +19,11 @@ import { accumulateLogits } from "./accumulate";
 import { attributionsOf } from "./attribution";
 import { decode } from "./decode";
 import { tablesToRow } from "./featurize";
+import { modelUrl as urlOfModel } from "./models";
 import { planWindows } from "./windows";
 import { MARKER_PITCH, MAX_SINGLE_TOKENS } from "./types";
 import type { PerfNote, ScoreNote as ModelNote, SimBundle } from "./types";
+import type { MlignModelId } from "./models";
 import type { MlignSession } from "./session";
 import type { Match } from "../types";
 import type { ScoreNote } from "../../score/scoreNotes";
@@ -115,10 +117,11 @@ export interface InsertedNote {
      *
      * Two numbers, and they mean different things: `confidence` is that this is
      * an ornament and that it is that note's, `share` is that if it ornaments
-     * anything then it is that note. Absent only when the model has no
-     * attribution head, or when no window covered this note — what counts as
-     * sure enough is `../divergences`'s judgement, not this module's. See
-     * `./attribution`.
+     * anything then it is that note. They mean that under every checkpoint —
+     * what v3 changed is how the first of them is arrived at, not what it says.
+     * Absent only when the model has no attribution head, or when no window
+     * covered this note — what counts as sure enough is `../divergences`'s
+     * judgement, not this module's. See `./attribution`.
      */
     ornamentOf?: { scoreId: string; confidence: number; share: number };
 }
@@ -146,7 +149,17 @@ export interface AlignResult {
 }
 
 export interface AlignOptions {
-    /** Overrides where the weights are fetched from. */
+    /**
+     * Which checkpoint to align with. `DEFAULT_MODEL` when unset, and ignored
+     * when `modelUrl` names a file directly.
+     *
+     * The older models remain correct: they align identically, and the only
+     * thing that changes with the choice is how much the ornament attribution
+     * is worth. Nothing downstream needs to know which one ran — the two
+     * numbers on `ornamentOf` mean the same thing under all of them.
+     */
+    model?: MlignModelId;
+    /** Overrides where the weights are fetched from, `model` included. */
     modelUrl?: string;
     /** Called as the alignment moves from stage to stage. */
     onProgress?: (progress: AlignProgress) => void;
@@ -266,7 +279,8 @@ export async function alignScoreToPerformance(
 
     started = performance.now();
     await announce(options, { stage: "loading" });
-    const session = options.session ?? (await loadSession(options.modelUrl));
+    const session =
+        options.session ?? (await loadSession(options.modelUrl ?? urlOfModel(options.model)));
     timings.loading = since(started);
 
     started = performance.now();

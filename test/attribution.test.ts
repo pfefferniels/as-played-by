@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest'
-import { attributionsOf } from '../src/alignment/mlign/attribution'
+import { attributionRow, attributionsOf } from '../src/alignment/mlign/attribution'
 import { accumulateLogits } from '../src/alignment/mlign/accumulate'
 import { UNCOVERED_SIM, type MlignRow, type SimBundle } from '../src/alignment/mlign/types'
 import type { EncoderOutput, MlignSession, ModelFeeds, RunOptions } from '../src/alignment/mlign/session'
@@ -76,6 +76,7 @@ describe('reading the ornament-attribution head', () => {
  */
 const attributingSession = (): MlignSession => ({
   hasAttribution: true,
+  attrConditioned: 'none',
   async run(feeds: ModelFeeds, options: RunOptions = {}): Promise<EncoderOutput> {
     const { n, m } = feeds
     const T = 2 + n + m
@@ -171,6 +172,185 @@ describe('accumulating the attribution head over windows', () => {
     })
 
     expect(bundle.attrNone![3]).toBe(UNCOVERED_SIM)
+    expect(attributionsOf(bundle).has(3)).toBe(false)
+    expect(attributionsOf(bundle).has(0)).toBe(true)
+  })
+})
+
+/**
+ * A v3 bundle. `simRows` is the *accumulated* (n, m) matrix, which holds twice
+ * the raw similarity — the doubling `accumulateLogits` does — so these tests
+ * see exactly what the app's own pipeline hands `attributionRow`.
+ */
+const factored = (
+  n: number,
+  m: number,
+  attrRows: number[][],
+  gate: number[],
+  simRows: number[][],
+  nullP: number[]
+): SimBundle => ({
+  n,
+  m,
+  sim: Float32Array.from(simRows.flat()),
+  nullS: new Float32Array(n),
+  nullP: Float32Array.from(nullP),
+  attr: Float32Array.from(attrRows.flat()),
+  attrNone: new Float32Array(m),
+  attrGate: Float32Array.from(gate),
+})
+
+/** `log(sum(exp(row)))`, which a factored row must come to 0. */
+const logSumExp = (row: Float64Array | number[]): number => {
+  const vs = [...row].filter((v) => v !== -Infinity)
+  const mx = Math.max(...vs)
+  return mx + Math.log(vs.reduce((s, v) => s + Math.exp(v - mx), 0))
+}
+
+describe('the factored attribution row (v3)', () => {
+  it('is already a distribution: the row exponentiates to 1', () => {
+    const row = attributionRow(
+      factored(3, 1, [[2, 0, -1]], [0.5], [[1], [0], [-2]], [0.25]),
+      0
+    )!
+
+    expect(logSumExp(row)).toBeCloseTo(0, 10)
+    expect([...row].reduce((s, v) => s + Math.exp(v), 0)).toBeCloseTo(1, 10)
+  })
+
+  it('reads the match head from the undoubled p->s logits', () => {
+    // n = 2, m = 1. attr [2, 0], gate 0, nullP 0, and an accumulated sim column
+    // of [2, 0] — which is the raw [1, 0] the model itself would have seen,
+    // doubled by the accumulation. Taking the doubled column at face value
+    // gives 0.0469 / 0.0063 / 0.9467 instead: a sharper p->s softmax, a smaller
+    // P(insertion), and an ornament note the app's 0.35 threshold would drop.
+    const row = attributionRow(factored(2, 1, [[2, 0]], [0], [[2], [0]], [0]), 0)!
+
+    expect(Math.exp(row[0])).toBeCloseTo(0.093339, 5)
+    expect(Math.exp(row[1])).toBeCloseTo(0.012632, 5)
+    expect(Math.exp(row[2])).toBeCloseTo(0.894029, 5)
+  })
+
+  it('lets the gate move mass between ornamenting and not, and nothing else', () => {
+    const of = (g: number) => attributionRow(factored(2, 1, [[3, 0]], [g], [[0], [0]], [0]), 0)!
+    const shut = of(-8)
+    const open = of(8)
+
+    // A shut gate sends the row to "not an ornament"; an open one leaves it on
+    // whatever the match head allowed. The ranking between the two written
+    // notes is the same either way — that is what "factored" means.
+    expect(Math.exp(shut[2])).toBeGreaterThan(Math.exp(open[2]))
+    expect(shut[0] - shut[1]).toBeCloseTo(open[0] - open[1], 10)
+    expect(logSumExp(shut)).toBeCloseTo(0, 10)
+    expect(logSumExp(open)).toBeCloseTo(0, 10)
+  })
+
+  it('floors the match head, so a certain match cannot silence the ranking', () => {
+    // A p->s row this lopsided puts P(insertion) far below exp(-12); without
+    // the floor the ornament half of the row would go to zero outright.
+    const row = attributionRow(factored(2, 1, [[4, 0]], [4], [[80], [0]], [-80]), 0)!
+
+    expect(Math.exp(row[0])).toBeGreaterThan(0)
+    expect(row[0]).toBeGreaterThan(-14)
+    // The clamp is the one thing that leaves a row off being exactly a
+    // distribution: it hands back mass the match head had taken away. A hair
+    // above zero, and only where the floor bit.
+    expect(logSumExp(row)).toBeGreaterThan(0)
+    expect(logSumExp(row)).toBeLessThan(1e-4)
+  })
+
+  it('keeps `share` the ranking alone, unmoved by how sure the match head is', () => {
+    // Two played notes with the same attribution row and gate but opposite
+    // verdicts from the match head: the confidences differ, the shares do not.
+    const attr = [
+      [2, 0],
+      [2, 0],
+    ]
+    const found = attributionsOf(
+      factored(2, 2, attr, [0, 0], [[0, 0], [0, 0]], [6, -6])
+    )
+
+    expect(found.get(0)!.share).toBeCloseTo(found.get(1)!.share, 10)
+    expect(found.get(0)!.confidence).toBeGreaterThan(found.get(1)!.confidence)
+  })
+
+  it('is exponentiated, never softmaxed again', () => {
+    const bundle = factored(3, 1, [[2, 0, -1]], [0.5], [[1], [0], [-2]], [0.25])
+    const row = attributionRow(bundle, 0)!
+    const found = attributionsOf(bundle)!
+
+    expect(found.get(0)!.scoreIdx).toBe(0)
+    expect(found.get(0)!.confidence).toBeCloseTo(Math.exp(row[0]), 12)
+    expect(found.get(0)!.share).toBeCloseTo(Math.exp(row[0] - logSumExp([...row].slice(0, 3))), 12)
+  })
+
+  it('says nothing about a played note no window covered', () => {
+    const bundle = factored(
+      2,
+      1,
+      [[UNCOVERED_SIM, UNCOVERED_SIM]],
+      [UNCOVERED_SIM],
+      [[UNCOVERED_SIM], [UNCOVERED_SIM]],
+      [1e9]
+    )
+
+    expect(attributionRow(bundle, 0)).toBeUndefined()
+    expect(attributionsOf(bundle).size).toBe(0)
+  })
+})
+
+/** The same fake head, exported as a `"factored"` graph would export it. */
+const factoredSession = (): MlignSession => {
+  const base = attributingSession()
+  return {
+    ...base,
+    attrConditioned: 'factored',
+    async run(feeds: ModelFeeds, options: RunOptions = {}): Promise<EncoderOutput> {
+      const out = await base.run(feeds, options)
+      if (!options.attribution) return out
+      const { n, m } = feeds
+      const gate = new Float32Array(2 + n + m)
+      for (let j = 0; j < m; j++) gate[2 + n + j] = 2
+      return { ...out, attrGate: gate }
+    },
+  }
+}
+
+describe('accumulating the gate over windows', () => {
+  it('carries it only for a graph that emits it', async () => {
+    const plain = await accumulateLogits(attributingSession(), row(3, 3), [[0, 3, 0, 3]], undefined, {
+      attribution: true,
+    })
+    expect(plain.attrGate).toBeUndefined()
+
+    const v3 = await accumulateLogits(factoredSession(), row(3, 3), [[0, 3, 0, 3]], undefined, {
+      attribution: true,
+    })
+    expect([...v3.attrGate!]).toEqual([2, 2, 2])
+  })
+
+  it('averages it, as the null logits are averaged', async () => {
+    const two = await accumulateLogits(
+      factoredSession(),
+      row(4, 4),
+      [
+        [0, 4, 0, 4],
+        [0, 4, 0, 4],
+      ],
+      undefined,
+      { attribution: true }
+    )
+
+    expect([...two.attrGate!]).toEqual([2, 2, 2, 2])
+  })
+
+  it('sentinels a played note no window reached', async () => {
+    const bundle = await accumulateLogits(factoredSession(), row(4, 4), [[0, 4, 0, 2]], undefined, {
+      attribution: true,
+    })
+
+    expect(bundle.attrGate![3]).toBe(UNCOVERED_SIM)
+    expect(attributionRow(bundle, 3)).toBeUndefined()
     expect(attributionsOf(bundle).has(3)).toBe(false)
     expect(attributionsOf(bundle).has(0)).toBe(true)
   })

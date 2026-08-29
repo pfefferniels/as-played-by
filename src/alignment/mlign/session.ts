@@ -11,13 +11,16 @@
  * the host — but it is asked for rather than always returned: its two per-token
  * tensors are as large as `s` and `p` together.
  *
- * The contract is `MLign/models/mlign-v2-fp16.onnx.json`; the shapes below are
- * that file's `graph` block.
+ * The contract is the `.onnx.json` sidecar beside each model file; the shapes
+ * below are `mlign-v3-fp16.onnx.json`'s `graph` block, which extends v2's by one
+ * output rather than changing any of it.
  *
  * Nothing here touches the DOM, so the whole module can be moved behind a Web
  * Worker later without changing anything but the caller.
  */
 
+import { defaultModelUrl } from "./models";
+import type { AttrConditioned } from "./types";
 import * as ort from "onnxruntime-web/wasm";
 // The package exports the binary at this root-level subpath. The `dist/` path
 // that most write-ups show is *not* exported and is a hard build error under
@@ -26,8 +29,6 @@ import * as ort from "onnxruntime-web/wasm";
 // a GitHub Pages sub-path with no further configuration.
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 
-/** The model as shipped in `public/`. Fetched at run time, never imported. */
-export const MODEL_FILE = "mlign-v2-fp16.onnx";
 
 /**
  * One window's model inputs, as `featurize.ts` produces them.
@@ -82,6 +83,12 @@ export interface EncoderOutput {
     attrNone?: Float32Array;
     /** The attribution head's own logit scale, which is not `scale`. */
     attrScale?: number;
+    /**
+     * `attr_gate` per token, length `T`. Only a `"factored"` graph emits it: it
+     * is the logit of "this insertion elaborates a written note", read at the
+     * performed tokens.
+     */
+    attrGate?: Float32Array;
 }
 
 /** What one forward pass should return. */
@@ -107,19 +114,22 @@ export interface MlignSession {
      * `public/` is the only thing swapping a model takes.
      */
     readonly hasAttribution: boolean;
+    /**
+     * How this graph's attribution row has to be put together.
+     *
+     * Read off the graph's own output names, because that is the only thing
+     * that is true of the weights themselves — a file can be renamed, copied or
+     * served from anywhere, and a host that decided this from the URL would
+     * quietly read a v3 row as a v2 one and get a number that means something
+     * else. `"none"` for a graph with no attribution head at all, which reads
+     * the same way as v2's for the code downstream: there is simply nothing to
+     * read.
+     */
+    readonly attrConditioned: AttrConditioned;
     /** Free the WASM-side session. */
     release(): Promise<void>;
 }
 
-/**
- * Where the model sits by default. `BASE_URL` rather than a leading-slash
- * literal, so a sub-path deploy resolves correctly — the same thing
- * `Viewer.tsx` does for `transcription.mei`.
- */
-export function defaultModelUrl(): string {
-    const base = import.meta.env?.BASE_URL ?? "/";
-    return `${base}${MODEL_FILE}`;
-}
 
 let ortConfigured = false;
 
@@ -176,11 +186,24 @@ export async function createMlignSession(
     });
 
     const hasAttribution = session.outputNames.includes("attr_s");
+    // The graph is the authority on which head it carries. `attr_gate` is the
+    // one output v3 adds, and its presence is the whole of the detection.
+    const attrConditioned: AttrConditioned =
+        hasAttribution && session.outputNames.includes("attr_gate") ? "factored" : "none";
+
     const ALIGNMENT_OUTPUTS = ["s", "p", "match_s", "match_p", "scale"];
-    const ATTRIBUTION_OUTPUTS = [...ALIGNMENT_OUTPUTS, "attr_s", "attr_p", "attr_none", "attr_scale"];
+    const ATTRIBUTION_OUTPUTS = [
+        ...ALIGNMENT_OUTPUTS,
+        "attr_s",
+        "attr_p",
+        "attr_none",
+        "attr_scale",
+        ...(attrConditioned === "factored" ? ["attr_gate"] : []),
+    ];
 
     return {
         hasAttribution,
+        attrConditioned,
 
         async run(feeds: ModelFeeds, options: RunOptions = {}): Promise<EncoderOutput> {
             const { n, m } = feeds;
@@ -227,6 +250,9 @@ export async function createMlignSession(
                           attrP: results.attr_p.data as Float32Array,
                           attrNone: results.attr_none.data as Float32Array,
                           attrScale: (results.attr_scale.data as Float32Array)[0],
+                          ...(attrConditioned === "factored"
+                              ? { attrGate: results.attr_gate.data as Float32Array }
+                              : {}),
                       }
                     : {}),
             };

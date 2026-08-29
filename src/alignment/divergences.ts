@@ -244,17 +244,27 @@ interface AcceptedAnchor {
 /**
  * Which of the head's answers to take, and on what evidence.
  *
- * Two ways in, because on real playing the head's two numbers come apart. It
- * will rank the right written note first, decisively, and still put most of its
- * mass on the note not being an ornament at all - which is what it does on both
- * of the trills Chopin's op. 9 no. 1 notates. Insisting on the first number
- * alone throws those away; ignoring it accepts every played note as decoration
- * of whatever it happens to lie nearest.
+ * Two ways in, because the head's two numbers can come apart. Under v2 they did
+ * so badly, and by construction: its "not an ornament" column was self-taught,
+ * and on real playing it would rank the right written note first, decisively,
+ * and still put most of its mass on the note not being an ornament at all -
+ * which is what it does on both of the trills Chopin's op. 9 no. 1 notates.
+ * Insisting on the first number alone throws those away; ignoring it accepts
+ * every played note as decoration of whatever it happens to lie nearest.
  *
  * So: the head's own confidence is enough on its own. Short of that, a clear
  * ranking is enough when the note it named is one the score already writes an
  * ornament sign on - because then two things that knew nothing about each other
  * agree, and the sign has already answered the question the head was unsure of.
+ *
+ * v3 answers that first question with the *match* head instead of guessing it
+ * again, so its confidences are on a footing its predecessor's were not, and
+ * the second route should fire far less often. Both stay: the route is chosen
+ * per note by what the numbers are, never by which model produced them, so this
+ * reads a v1, v2 or v3 answer without being told which it has. The thresholds
+ * below were set against v2 and have not been re-measured on v3 - they are
+ * conservative for it rather than wrong, since the change moves a real
+ * ornament's confidence up.
  */
 function acceptAttribution(
     insertion: InsertedNote,
