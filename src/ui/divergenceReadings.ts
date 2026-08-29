@@ -143,6 +143,25 @@ const NOTATION_ACTIONS = new Set<Action>([
 
 export const changesNotation = (action: Action): boolean => NOTATION_ACTIONS.has(action);
 
+/** How many notes in a row the recording must pass over before it is a passage. */
+export const PASSAGE_NOTES = 3;
+
+/**
+ * Whether a divergence is a stretch of music the performer went past, rather
+ * than a note or two missing from something that did sound.
+ *
+ * This is what earns a bracket in the score, and the two exclusions are the
+ * point of it. A thinned chord is not a passage however many notes it loses:
+ * they stand one above another at a moment that *was* played, so they are
+ * perfectly legible where they are and bracketing them would say the music
+ * stopped. And what falls beyond where the recording reaches is not something
+ * the performer did at all.
+ */
+export const isOmittedPassage = (divergence: Divergence): boolean =>
+    divergence.kind === "missing" &&
+    divergence.reading === "omitted-passage" &&
+    divergence.scoreIds.length >= PASSAGE_NOTES;
+
 export function timestamp(ms: number): string {
     const seconds = ms / 1000;
     return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;

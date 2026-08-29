@@ -35,6 +35,7 @@ import {
     CERTAINTIES,
     changesNotation,
     defaultAction,
+    isOmittedPassage,
     type Attribution,
     type Resolution,
 } from "./divergenceReadings";
@@ -673,30 +674,22 @@ export default function MLignApp() {
     }, [divergences, spans, resolutions]);
 
     /**
-     * The groups of written notes the recording passes over.
+     * The passages the recording goes straight past, which are the only thing a
+     * bracket is for.
      *
-     * Only groups: a single note that went unplayed has a notehead of its own to
-     * stand as, and the whole reason for a bracket is that a group of them has
-     * nowhere to stand. What is done with each group - whether its notes are
-     * legible where they are, or have to come out - is measured off the drawing.
+     * Not every group of unplayed notes: a note or two missing from a chord that
+     * did sound stands perfectly well as red noteheads, and so does a single
+     * note. A bracket is for a stretch of music that was not played at all,
+     * which is the one case with no room to be drawn in. Whether its notes then
+     * come out or stay is measured off the drawing.
      */
     const omissions = useMemo<OmittedGroup[]>(
         () =>
-            divergences.flatMap((divergence) =>
-                divergence.kind === "missing" && divergence.scoreIds.length > 1
-                    ? [
-                          {
-                              divergenceId: divergence.id,
-                              scoreIds: divergence.scoreIds,
-                              resolved: resolutions.has(divergence.id),
-                              colour:
-                                  divergence.reading === "outside"
-                                      ? UNALIGNED_COLOUR
-                                      : OMITTED_COLOUR,
-                          },
-                      ]
-                    : []
-            ),
+            divergences.filter(isOmittedPassage).map((divergence) => ({
+                divergenceId: divergence.id,
+                scoreIds: divergence.kind === "missing" ? divergence.scoreIds : [],
+                resolved: resolutions.has(divergence.id),
+            })),
         [divergences, resolutions]
     );
 

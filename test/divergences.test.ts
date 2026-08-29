@@ -6,7 +6,7 @@ import {
   type MissingDivergence,
   type ReplacedDivergence,
 } from '../src/alignment/divergences'
-import { defaultAction } from '../src/ui/divergenceReadings'
+import { defaultAction, isOmittedPassage } from '../src/ui/divergenceReadings'
 import type { OrnamentSign } from '../src/mei/ornamentSigns'
 import type { NoteSpan } from '../src/performance/midiSpans'
 import type { ScoreNote } from '../src/score/scoreNotes'
@@ -231,6 +231,64 @@ describe('written notes the recording never played', () => {
     })
 
     expect(missingOnes(all)[0].reading).toBe('outside')
+  })
+})
+
+/**
+ * Which of those earn a bracket in the score. Only a stretch the performer went
+ * straight past has nowhere to be drawn; everything else is legible where it is.
+ */
+describe('the omissions worth bracketing', () => {
+  const passage = (howMany: number) =>
+    build({
+      scoreNotes: [
+        scoreNote('n1', 0, 60),
+        ...Array.from({ length: howMany }, (_, i) => scoreNote(`g${i}`, i + 1, 62 + i)),
+        scoreNote('n2', howMany + 1, 67),
+      ],
+      deletions: Array.from({ length: howMany }, (_, i) => `g${i}`),
+    })
+
+  it('brackets a run of three notes the recording goes past', () => {
+    expect(passage(3).filter(isOmittedPassage)).toHaveLength(1)
+  })
+
+  it('leaves two notes to stand as noteheads of their own', () => {
+    const all = passage(2)
+
+    expect(missingOnes(all)[0].reading).toBe('omitted-passage')
+    expect(all.filter(isOmittedPassage)).toHaveLength(0)
+  })
+
+  // They stand one above another at a moment that did sound, so there is room
+  it('never brackets a thinned chord, however many notes it loses', () => {
+    const all = build({
+      scoreNotes: [
+        scoreNote('n1', 0, 60),
+        scoreNote('a', 0, 64),
+        scoreNote('b', 0, 67),
+        scoreNote('c', 0, 72),
+        scoreNote('n2', 4, 67),
+      ],
+      deletions: ['a', 'b', 'c'],
+    })
+
+    expect(missingOnes(all)[0].reading).toBe('thinned-chord')
+    expect(all.filter(isOmittedPassage)).toHaveLength(0)
+  })
+
+  it('never brackets what lies beyond where the recording reaches', () => {
+    const all = build({
+      scoreNotes: [
+        scoreNote('n1', 0, 60),
+        scoreNote('n2', 4, 67),
+        ...Array.from({ length: 4 }, (_, i) => scoreNote(`t${i}`, 99 + i, 72)),
+      ],
+      deletions: ['t0', 't1', 't2', 't3'],
+    })
+
+    expect(missingOnes(all)[0].reading).toBe('outside')
+    expect(all.filter(isOmittedPassage)).toHaveLength(0)
   })
 })
 

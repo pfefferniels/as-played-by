@@ -17,6 +17,9 @@
  * A group whose notes do have room keeps them, with the bracket around them. The
  * measuring is done on what verovio actually drew, so this needs no opinion
  * about tempo, scale or how long the omission was.
+ *
+ * What counts as a passage worth bracketing at all is not decided here - that is
+ * a reading of the music, and the caller holds it. This draws what it is given.
  */
 
 import { staffSpace, type ScoreOptions } from "./toolkit";
@@ -43,8 +46,6 @@ export interface OmittedGroup {
     scoreIds: readonly string[];
     /** Drawn faintly until the reader has said what it is */
     resolved: boolean;
-    /** Overrides the default, for a group that is not an omission by the performer */
-    colour?: string;
 }
 
 export function clearOmissionMarks(root: Element): void {
@@ -89,7 +90,7 @@ export function drawOmissionMarks(
     if (groups.length === 0) return;
 
     const space = staffSpace(options);
-    const fallback = options?.colour ?? OMITTED_COLOUR;
+    const colour = options?.colour ?? OMITTED_COLOUR;
     /** Staves that lost notes, swept once at the end for what those notes held up */
     const emptied = new Set<Element>();
 
@@ -126,7 +127,7 @@ export function drawOmissionMarks(
                 bracket(staff, on, {
                     group,
                     space,
-                    colour: group.colour ?? fallback,
+                    colour,
                     // Only where the notes have been taken out: where they are
                     // still there, they can be counted
                     count: crowded ? notes.length : undefined,

@@ -176,9 +176,9 @@ describe('marking a passage the recording passes over', () => {
     expect(marks()[0].getAttribute('data-divergence')).toBe('missing-7')
   })
 
-  it('draws in the colour the group was given', () => {
+  it('draws in the colour it was given', () => {
     const notes = crowded()
-    drawOmissionMarks(root, [group(notes.map((note) => note.id), { colour: '#c9ced6' })])
+    drawOmissionMarks(root, [group(notes.map((note) => note.id))], { colour: '#c9ced6' })
 
     expect(marks()[0].querySelector('path')?.getAttribute('stroke')).toBe('#c9ced6')
   })
