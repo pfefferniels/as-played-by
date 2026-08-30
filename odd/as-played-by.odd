@@ -59,7 +59,7 @@
 
         <p>Whether this is the right way round is an open question. Asking the MEI community to put
           <gi>recording</gi> into <ident type="class">att.source</ident> would remove the need for a
-          customization at this point altogether [link to paper here].</p>
+          customization at this point altogether.</p>
       </div>
 
       <div>
@@ -89,6 +89,30 @@
         <p><gi>performance</gi> is a member of <ident type="class">model.resourceLike</ident>, which
           <gi>music</gi> admits only before <gi>front</gi> and <gi>body</gi>. Appending it to
           <gi>music</gi> puts it after <gi>body</gi>, where MEI does not allow it.</p>
+      </div>
+
+      <div>
+        <head>References</head>
+
+        <listBibl>
+          <bibl>
+            <author>Devaney, Johanna</author>, and <author>Hubert Léveillé Gauvin</author>.
+            <title level="a">Encoding music performance data in Humdrum and MEI</title>.
+            <title level="j">International Journal on Digital Libraries</title>
+            <biblScope unit="volume">20</biblScope> (<date when="2019">2019</date>),
+            <biblScope unit="page" from="81" to="91">81–91</biblScope>.
+            <ref target="https://doi.org/10.1007/s00799-017-0229-3"
+              >https://doi.org/10.1007/s00799-017-0229-3</ref>
+          </bibl>
+          <bibl>
+            <author>Neumann, Joshua</author>, and <author>Kristina Richts-Matthaei</author>.
+            <title level="a">Modelling Performance – Conceptual Realities vs. Practical
+              Limitations in MEI</title>.
+            <title level="m">Music Encoding Conference</title>, <date when="2024">2024</date>.
+            <ref target="https://works.hcommons.org/records/mb7px-jtd86"
+              >https://works.hcommons.org/records/mb7px-jtd86</ref>
+          </bibl>
+        </listBibl>
       </div>
 
       <div>
@@ -176,31 +200,6 @@
           </elementSpec>
 
           <elementSpec ident="when" module="MEI.performance" mode="change">
-            <attList>
-              <attDef ident="type" mode="change" usage="req">
-                <desc xml:lang="en">Which of the five shapes this record takes.</desc>
-                <valList type="closed" mode="replace">
-                  <valItem ident="match">
-                    <desc xml:lang="en">A written note that sounded.</desc>
-                  </valItem>
-                  <valItem ident="deletion">
-                    <desc xml:lang="en">A written note that was not played.</desc>
-                  </valItem>
-                  <valItem ident="insertion">
-                    <desc xml:lang="en">A note that sounded without being written.</desc>
-                  </valItem>
-                  <valItem ident="substitution">
-                    <desc xml:lang="en">A written note that sounded at another pitch.</desc>
-                  </valItem>
-                  <valItem ident="sustain">
-                    <desc xml:lang="en">A press of the sustaining pedal.</desc>
-                  </valItem>
-                  <valItem ident="soft">
-                    <desc xml:lang="en">A press of the soft pedal.</desc>
-                  </valItem>
-                </valList>
-              </attDef>
-            </attList>
 
             <constraintSpec ident="when-shapes" scheme="schematron" mode="add">
               <constraint>
@@ -281,9 +280,73 @@
                 </sch:rule>
               </constraint>
             </constraintSpec>
+            <attList>
+              <attDef ident="type" mode="change" usage="req">
+                <desc xml:lang="en">Which of the five shapes this record takes.</desc>
+                <valList type="closed" mode="replace">
+                  <valItem ident="match">
+                    <desc xml:lang="en">A written note that sounded.</desc>
+                  </valItem>
+                  <valItem ident="deletion">
+                    <desc xml:lang="en">A written note that was not played.</desc>
+                  </valItem>
+                  <valItem ident="insertion">
+                    <desc xml:lang="en">A note that sounded without being written.</desc>
+                  </valItem>
+                  <valItem ident="substitution">
+                    <desc xml:lang="en">A written note that sounded at another pitch.</desc>
+                  </valItem>
+                  <valItem ident="sustain">
+                    <desc xml:lang="en">A press of the sustaining pedal.</desc>
+                  </valItem>
+                  <valItem ident="soft">
+                    <desc xml:lang="en">A press of the soft pedal.</desc>
+                  </valItem>
+                </valList>
+              </attDef>
+            </attList>
           </elementSpec>
 
           <elementSpec ident="extData" module="MEI.shared" mode="change">
+
+            <constraintSpec ident="extdata-values" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'velocity' or @type = 'pitch' or @type = 'writtenPitch']">
+                  <sch:assert test="matches(normalize-space(.), '^(1[01][0-9]|12[0-7]|[0-9]{1,2})$')"
+                    >A velocity or a pitch is a whole number from 0 to 127.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'duration']">
+                  <sch:assert test="matches(normalize-space(.), '^[0-9]+ms$')">A duration is written
+                    in whole milliseconds with the 'ms' unit, for the reason given for
+                    @absolute.</sch:assert>
+                </sch:rule>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'onsetTicks' or @type = 'durationTicks' or @type = 'ornamentSlot']">
+                  <sch:assert test="matches(normalize-space(.), '^[0-9]+$')">A tick count and an
+                    ornament slot are whole numbers.</sch:assert>
+                </sch:rule>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'confidence' or @type = 'ornamentAnchorConfidence']">
+                  <sch:assert test="matches(normalize-space(.), '^(0(\.[0-9]+)?|1(\.0+)?)$')">A
+                    confidence is a number from 0 to 1.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchor']">
+                  <sch:assert
+                    test="starts-with(normalize-space(.), '#') and //*[@xml:id = substring-after(normalize-space(current()), '#')]"
+                    >An ornamentAnchor is a reference of the form '#id' resolving to an element of
+                    this document.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
+                  <sch:assert
+                    test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An
+                    ornamentAnchorFrom says whether the model named the anchor ('model'), whether an
+                    ornament sign in the score settled a ranking the model was unsure of
+                    ('model-and-sign'), or whether it was guessed from the timing
+                    ('timing').</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
             <attList>
               <attDef ident="type" mode="change" usage="req">
                 <desc xml:lang="en">Which measurement or judgement this datum holds.</desc>
@@ -337,45 +400,6 @@
                 </valList>
               </attDef>
             </attList>
-
-            <constraintSpec ident="extdata-values" scheme="schematron" mode="add">
-              <constraint>
-                <sch:rule
-                  context="mei:when/mei:extData[@type = 'velocity' or @type = 'pitch' or @type = 'writtenPitch']">
-                  <sch:assert test="matches(normalize-space(.), '^(1[01][0-9]|12[0-7]|[0-9]{1,2})$')"
-                    >A velocity or a pitch is a whole number from 0 to 127.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:when/mei:extData[@type = 'duration']">
-                  <sch:assert test="matches(normalize-space(.), '^[0-9]+ms$')">A duration is written
-                    in whole milliseconds with the 'ms' unit, for the reason given for
-                    @absolute.</sch:assert>
-                </sch:rule>
-                <sch:rule
-                  context="mei:when/mei:extData[@type = 'onsetTicks' or @type = 'durationTicks' or @type = 'ornamentSlot']">
-                  <sch:assert test="matches(normalize-space(.), '^[0-9]+$')">A tick count and an
-                    ornament slot are whole numbers.</sch:assert>
-                </sch:rule>
-                <sch:rule
-                  context="mei:when/mei:extData[@type = 'confidence' or @type = 'ornamentAnchorConfidence']">
-                  <sch:assert test="matches(normalize-space(.), '^(0(\.[0-9]+)?|1(\.0+)?)$')">A
-                    confidence is a number from 0 to 1.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchor']">
-                  <sch:assert
-                    test="starts-with(normalize-space(.), '#') and //*[@xml:id = substring-after(normalize-space(current()), '#')]"
-                    >An ornamentAnchor is a reference of the form '#id' resolving to an element of
-                    this document.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
-                  <sch:assert
-                    test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An
-                    ornamentAnchorFrom says whether the model named the anchor ('model'), whether an
-                    ornament sign in the score settled a ranking the model was unsure of
-                    ('model-and-sign'), or whether it was guessed from the timing
-                    ('timing').</sch:assert>
-                </sch:rule>
-              </constraint>
-            </constraintSpec>
           </elementSpec>
 
           <elementSpec ident="music" module="MEI.shared" mode="change">

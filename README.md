@@ -1,6 +1,6 @@
 # As played by
 
-An MEI customization. Defines how an MEI document carries, beside the score, a record of one or
+MEI customization defining how an MEI document carries, beside the score, a record of one or
 more performances of it: which written note a sounded event realised, when it was struck, how long
 and how loud.
 
@@ -31,36 +31,19 @@ list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTi
 `ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. For further reference see
 the [ODD](odd/as-played-by.odd).
 
-## Layout
-
-| | |
-|---|---|
-| `odd/` | the customization, and the RelaxNG and Schematron compiled from it |
-| `examples/` | an invented file covering all five shapes, a real one, and a counter-example per rule under `invalid/` |
-| `index.html` | the page, which renders `examples/traeumerei.mei` |
-| `vendor/verovio/` | a committed WebAssembly build of the fork, so the page needs no build step |
-| `tools/` | building the schemas, checking the examples, rebuilding the vendored verovio |
-
 ## Checking a document
-
-`tools/validate.sh` runs the grammar and the rules over `examples/`, and asserts that everything
-under `examples/invalid/` is rejected.
-
-```
-   tools/validate.sh
-```
 
 To check a document of your own, validate it against `odd/as-played-by.rng` and
 `odd/as-played-by.sch`. Most XML editors do this from the two `<?xml-model?>` instructions that
 `examples/shapes.mei` carries.
 
-After changing the ODD, recompile it.
+To recompile the ODD after changing it:
 
 ```
    tools/build-schema.sh
 ```
 
-Both need `curl`, `unzip`, `xmllint` and `saxon` (`brew install saxon`).
+It needs `curl`, `unzip`, `xmllint` and `saxon` (`brew install saxon`).
 
 ## Disclosure
 
