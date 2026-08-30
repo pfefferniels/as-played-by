@@ -1,0 +1,415 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="https://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_odds.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="https://www.tei-c.org/release/xml/tei/custom/schema/relaxng/tei_odds.rng" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xmlns:rng="http://relaxng.org/ns/structure/1.0"
+  xmlns:sch="http://purl.oclc.org/dsdl/schematron">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt>
+        <title>As played by: an MEI customization for score-to-performance alignment</title>
+        <respStmt>
+          <resp>Authored by</resp>
+          <name xml:id="NP">Niels Pfeffer</name>
+        </respStmt>
+      </titleStmt>
+      <publicationStmt>
+        <p>Published under the same terms as MEI itself.</p>
+      </publicationStmt>
+      <sourceDesc>
+        <p>Derived from MEI 5.1.</p>
+      </sourceDesc>
+    </fileDesc>
+    <revisionDesc>
+      <change n="1" when="2026-08-30" who="#NP">
+        <desc>Creation of the initial ODD.</desc>
+      </change>
+    </revisionDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <head>Scope</head>
+
+        <p>An <soCalled>as played by</soCalled> document is an MEI file that carries, beside the
+          score, a record of one or more performances of it: which written note each sounded event
+          realised, when it was struck, how loud, and where the two disagreed. The record lives in
+          <gi>performance</gi>, and nothing outside it is constrained.</p>
+
+        <p>The customization exists because two independent readers have to agree on such a file:
+          the <ref target="https://github.com/pfefferniels/mpm-desk">MPM Desk</ref>, which reads the
+          alignment back in order to fit performance instructions to it, and the <ref
+            target="https://github.com/pfefferniels/verovio">verovio fork</ref> on branch
+          <code>aligned-mei</code>, which lays a score out along performed time rather than notated
+          duration. Where they read the same attribute differently, the narrower reading is the one
+          written down here.</p>
+
+        <p>Almost everything the format uses is already legal MEI. <gi>when</gi> takes
+          <gi>extData</gi> children in plain MEI 5.1, and <att>type</att> and <att>corresp</att>
+          reach it through <ident type="class">att.common</ident>. One attribute has to be added,
+          and the rest of this customization only narrows what MEI already allows.</p>
+      </div>
+
+      <div>
+        <head>What is added</head>
+
+        <p><gi>recording</gi> is not a member of <ident type="class">att.source</ident> in MEI 5.1,
+          so it cannot name the take it records. Both readers rely on that name: it is how a
+          document holding several takes says which one a given <gi>when</gi> belongs to, and how
+          the verovio option <code>performanceRecording</code> selects one. The alternative would be
+          <gi>avFile</gi>, which names a file rather than the manifestation the header already
+          describes.</p>
+
+        <p>Whether this is the right way round is an open question. Asking the MEI community to put
+          <gi>recording</gi> into <ident type="class">att.source</ident> would remove the need for a
+          customization at this point altogether.</p>
+      </div>
+
+      <div>
+        <head>What is narrowed</head>
+
+        <p>A <gi>when</gi> in a <gi>recording</gi> takes one of five shapes, told apart by
+          <att>type</att> and by which of <att>data</att> and <att>absolute</att> are present. A
+          match has both, because there is a written note and a moment it sounded at. A deletion has
+          only <att>data</att>, because the note was never played. An insertion has only
+          <att>absolute</att>, because something sounded that the score does not write. A
+          substitution has both and sounds at a pitch the score does not give. A pedal event has
+          only a moment.</p>
+
+        <p><att>absolute</att> is restricted to whole milliseconds written with the
+          <code>ms</code> unit. MEI itself is more permissive, and so is the verovio fork, which
+          also reads <code>s</code> and <code>min</code>. The MPM Desk reads the attribute with
+          <code>parseInt</code> and would take <code>12.5s</code> for twelve milliseconds. Until
+          both readers agree, only the form they read alike is allowed here. The same holds for
+          <gi>extData</gi> of type <code>duration</code>.</p>
+
+        <p>The <att>type</att> of an <gi>extData</gi> is drawn from a closed list. The list is the
+          substance of the format: it is what a reader may expect to find and what a writer may
+          emit, and until now it existed only as agreement between two source files.</p>
+
+        <p><att>corresp</att> on a <gi>when</gi> names the event in the source recording that was
+          heard, in whatever identifiers that recording uses. It is deliberately left unconstrained
+          and deliberately not a reference into the MEI document, which is why it carries no
+          leading <code>#</code>. It is optional, and a reader that cannot resolve it loses only
+          the way back to the audio or MIDI it came from.</p>
+
+        <p>Constraining <att>type</att> on <gi>when</gi> also constrains the <gi>when</gi> elements
+          inside a <gi>clip</gi>, which this format does not otherwise use. A document that needs
+          <gi>clip</gi> for its own purposes is outside the scope of this customization.</p>
+      </div>
+
+      <div>
+        <head>Known pitfalls</head>
+
+        <p>An <att>xml:id</att> is an NCName and may not begin with a digit. A bare UUID therefore
+          fails validation roughly half the time, which is easy to miss when the identifiers are
+          generated. Prefixing them is enough.</p>
+
+        <p><gi>performance</gi> is a member of <ident type="class">model.resourceLike</ident>, which
+          <gi>music</gi> admits only before <gi>front</gi> and <gi>body</gi>. Appending it to
+          <gi>music</gi> puts it after <gi>body</gi>, where MEI does not allow it.</p>
+      </div>
+
+      <div>
+        <head>Schema</head>
+
+        <schemaSpec ident="as-played-by" ns="http://www.music-encoding.org/ns/mei" prefix="mei_"
+          start="mei meiHead meiCorpus music">
+
+          <constraintSpec ident="set_ns" scheme="schematron" mode="add">
+            <constraint>
+              <sch:ns prefix="mei" uri="http://www.music-encoding.org/ns/mei"/>
+              <sch:ns prefix="xlink" uri="http://www.w3.org/1999/xlink"/>
+            </constraint>
+          </constraintSpec>
+
+          <moduleRef key="MEI"/>
+          <moduleRef key="MEI.analytical"/>
+          <moduleRef key="MEI.cmn"/>
+          <moduleRef key="MEI.cmnOrnaments"/>
+          <moduleRef key="MEI.corpus"/>
+          <moduleRef key="MEI.critapp"/>
+          <moduleRef key="MEI.drama"/>
+          <moduleRef key="MEI.edittrans"/>
+          <moduleRef key="MEI.externalsymbols"/>
+          <moduleRef key="MEI.facsimile"/>
+          <moduleRef key="MEI.figtable"/>
+          <moduleRef key="MEI.fingering"/>
+          <moduleRef key="MEI.frbr"/>
+          <moduleRef key="MEI.genetic"/>
+          <moduleRef key="MEI.gestural"/>
+          <moduleRef key="MEI.harmony"/>
+          <moduleRef key="MEI.header"/>
+          <moduleRef key="MEI.lyrics"/>
+          <moduleRef key="MEI.mensural"/>
+          <moduleRef key="MEI.midi"/>
+          <moduleRef key="MEI.msDesc"/>
+          <moduleRef key="MEI.namesdates"/>
+          <moduleRef key="MEI.neumes"/>
+          <moduleRef key="MEI.performance"/>
+          <moduleRef key="MEI.ptrref"/>
+          <moduleRef key="MEI.shared"/>
+          <moduleRef key="MEI.stringtab"/>
+          <moduleRef key="MEI.text"/>
+          <moduleRef key="MEI.usersymbols"/>
+          <moduleRef key="MEI.visual"/>
+
+          <classSpec ident="att.meiVersion" module="MEI.shared" type="atts" mode="change">
+            <attList>
+              <attDef ident="meiversion" usage="rec" mode="change">
+                <valList type="closed" mode="change">
+                  <valItem ident="5.1"/>
+                  <valItem ident="5.1+asPlayedBy"/>
+                  <valItem ident="5.1+anyStart" mode="delete"/>
+                  <valItem ident="5.1+basic" mode="delete"/>
+                  <valItem ident="5.1+CMN" mode="delete"/>
+                  <valItem ident="5.1+Mensural" mode="delete"/>
+                  <valItem ident="5.1+Neumes" mode="delete"/>
+                </valList>
+              </attDef>
+            </attList>
+          </classSpec>
+
+          <elementSpec ident="recording" module="MEI.performance" mode="change">
+            <desc xml:lang="en">One performance of the score, named by the manifestation it was
+              taken from.</desc>
+            <classes mode="change">
+              <memberOf key="att.source"/>
+            </classes>
+            <constraintSpec ident="recording-names-a-take" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule context="mei:performance/mei:recording">
+                  <sch:assert test="@source">A recording must name its take in @source, so that a
+                    document holding several takes can say which one a when belongs to.</sch:assert>
+                  <sch:assert
+                    test="not(@source) or (starts-with(@source, '#') and //*[@xml:id = substring-after(current()/@source, '#')])"
+                    >The @source of a recording must be a reference of the form '#id' resolving to
+                    an element of this document, usually a manifestation.</sch:assert>
+                  <sch:assert
+                    test="not(@source) or count(../mei:recording[@source = current()/@source]) = 1"
+                    >Two recordings carry the same @source, so neither can be selected by
+                    it.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+          </elementSpec>
+
+          <elementSpec ident="when" module="MEI.performance" mode="change">
+            <attList>
+              <attDef ident="type" mode="change" usage="req">
+                <desc xml:lang="en">Which of the five shapes this record takes.</desc>
+                <valList type="closed" mode="replace">
+                  <valItem ident="match">
+                    <desc xml:lang="en">A written note that sounded.</desc>
+                  </valItem>
+                  <valItem ident="deletion">
+                    <desc xml:lang="en">A written note that was not played.</desc>
+                  </valItem>
+                  <valItem ident="insertion">
+                    <desc xml:lang="en">A note that sounded without being written.</desc>
+                  </valItem>
+                  <valItem ident="substitution">
+                    <desc xml:lang="en">A written note that sounded at another pitch.</desc>
+                  </valItem>
+                  <valItem ident="sustain">
+                    <desc xml:lang="en">A press of the sustaining pedal.</desc>
+                  </valItem>
+                  <valItem ident="soft">
+                    <desc xml:lang="en">A press of the soft pedal.</desc>
+                  </valItem>
+                </valList>
+              </attDef>
+            </attList>
+
+            <constraintSpec ident="when-shapes" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule context="mei:recording/mei:when[@type = 'match']">
+                  <sch:assert test="@data">A match names the written note in @data.</sch:assert>
+                  <sch:assert test="@absolute">A match names the moment it sounded in
+                    @absolute.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:recording/mei:when[@type = 'deletion']">
+                  <sch:assert test="@data">A deletion names the written note in @data.</sch:assert>
+                  <sch:assert test="not(@absolute)">A deletion has no @absolute, because the note
+                    was never played.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:recording/mei:when[@type = 'insertion']">
+                  <sch:assert test="not(@data)">An insertion has no @data, because there is no
+                    written note for it to point at.</sch:assert>
+                  <sch:assert test="@absolute">An insertion names the moment it sounded in
+                    @absolute.</sch:assert>
+                  <sch:assert test="mei:extData[@type = 'pitch']">An insertion carries the pitch
+                    that sounded in extData of type 'pitch', since the score does not give
+                    it.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:recording/mei:when[@type = 'substitution']">
+                  <sch:assert test="@data">A substitution names the written note in
+                    @data.</sch:assert>
+                  <sch:assert test="@absolute">A substitution names the moment it sounded in
+                    @absolute.</sch:assert>
+                  <sch:assert test="mei:extData[@type = 'pitch']">A substitution carries the pitch
+                    that sounded in extData of type 'pitch', which is what makes it a substitution
+                    rather than a match.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:recording/mei:when[@type = 'sustain' or @type = 'soft']">
+                  <sch:assert test="not(@data)">A pedal event has no @data, because it realises no
+                    written note.</sch:assert>
+                  <sch:assert test="@absolute">A pedal event names the moment it was pressed in
+                    @absolute.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+
+            <constraintSpec ident="when-points-into-the-score" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule context="mei:recording/mei:when[@data]">
+                  <sch:assert
+                    test="starts-with(@data, '#') and //*[@xml:id = substring-after(current()/@data, '#')]"
+                    >The @data of a when must be a reference of the form '#id' resolving to an
+                    element of this document.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+
+            <constraintSpec ident="when-absolute-in-whole-milliseconds" scheme="schematron"
+              mode="add">
+              <constraint>
+                <sch:rule context="mei:recording/mei:when[@absolute]">
+                  <sch:assert test="matches(@absolute, '^[0-9]+ms$')">The @absolute of a when is
+                    written in whole milliseconds with the 'ms' unit. Other forms MEI allows are
+                    read differently by the two readers this format serves.</sch:assert>
+                  <sch:assert test="@abstype = 'smil'">A when carrying @absolute states
+                    @abstype='smil'; the verovio fork warns on any other value.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+
+            <constraintSpec ident="when-ornament-fields-belong-together" scheme="schematron"
+              mode="add">
+              <constraint>
+                <sch:rule context="mei:recording/mei:when">
+                  <sch:assert
+                    test="not(mei:extData[@type = 'ornamentAnchorConfidence']) or mei:extData[@type = 'ornamentAnchorConfidenceOf']"
+                    >An ornamentAnchorConfidence is written together with an
+                    ornamentAnchorConfidenceOf naming which quantity it holds. An unlabelled number
+                    cannot be compared across files.</sch:assert>
+                  <sch:assert
+                    test="not(mei:extData[@type = 'ornamentAnchorFrom' or @type = 'ornamentAnchorConfidence' or @type = 'ornamentSlot']) or mei:extData[@type = 'ornamentAnchor']"
+                    >The ornament fields describe an anchor, so they require an ornamentAnchor to
+                    describe.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+          </elementSpec>
+
+          <elementSpec ident="extData" module="MEI.shared" mode="change">
+            <attList>
+              <attDef ident="type" mode="change" usage="req">
+                <desc xml:lang="en">Which measurement or judgement this datum holds.</desc>
+                <valList type="closed" mode="replace">
+                  <valItem ident="velocity">
+                    <desc xml:lang="en">MIDI velocity, 0 to 127.</desc>
+                  </valItem>
+                  <valItem ident="duration">
+                    <desc xml:lang="en">How long the note sounded, in whole milliseconds.</desc>
+                  </valItem>
+                  <valItem ident="pitch">
+                    <desc xml:lang="en">The MIDI pitch that sounded.</desc>
+                  </valItem>
+                  <valItem ident="writtenPitch">
+                    <desc xml:lang="en">The MIDI pitch the score writes, where another
+                      sounded.</desc>
+                  </valItem>
+                  <valItem ident="onsetTicks">
+                    <desc xml:lang="en">The onset in the ticks of the source recording.</desc>
+                  </valItem>
+                  <valItem ident="durationTicks">
+                    <desc xml:lang="en">The duration in the ticks of the source recording.</desc>
+                  </valItem>
+                  <valItem ident="confidence">
+                    <desc xml:lang="en">How sure the aligner was of this record, from 0 to 1.</desc>
+                  </valItem>
+                  <valItem ident="reading">
+                    <desc xml:lang="en">What a reader made of the divergence.</desc>
+                  </valItem>
+                  <valItem ident="resp">
+                    <desc xml:lang="en">Who is responsible for that reading.</desc>
+                  </valItem>
+                  <valItem ident="certainty">
+                    <desc xml:lang="en">How sure that reader was.</desc>
+                  </valItem>
+                  <valItem ident="ornamentAnchor">
+                    <desc xml:lang="en">The written note this sounded note decorates.</desc>
+                  </valItem>
+                  <valItem ident="ornamentAnchorFrom">
+                    <desc xml:lang="en">How the anchor was arrived at.</desc>
+                  </valItem>
+                  <valItem ident="ornamentAnchorConfidence">
+                    <desc xml:lang="en">How sure the anchor is, from 0 to 1.</desc>
+                  </valItem>
+                  <valItem ident="ornamentAnchorConfidenceOf">
+                    <desc xml:lang="en">Which quantity that confidence holds.</desc>
+                  </valItem>
+                  <valItem ident="ornamentSlot">
+                    <desc xml:lang="en">Where this note falls within its ornament.</desc>
+                  </valItem>
+                </valList>
+              </attDef>
+            </attList>
+
+            <constraintSpec ident="extdata-values" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'velocity' or @type = 'pitch' or @type = 'writtenPitch']">
+                  <sch:assert test="matches(normalize-space(.), '^(1[01][0-9]|12[0-7]|[0-9]{1,2})$')"
+                    >A velocity or a pitch is a whole number from 0 to 127.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'duration']">
+                  <sch:assert test="matches(normalize-space(.), '^[0-9]+ms$')">A duration is written
+                    in whole milliseconds with the 'ms' unit, for the reason given for
+                    @absolute.</sch:assert>
+                </sch:rule>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'onsetTicks' or @type = 'durationTicks' or @type = 'ornamentSlot']">
+                  <sch:assert test="matches(normalize-space(.), '^[0-9]+$')">A tick count and an
+                    ornament slot are whole numbers.</sch:assert>
+                </sch:rule>
+                <sch:rule
+                  context="mei:when/mei:extData[@type = 'confidence' or @type = 'ornamentAnchorConfidence']">
+                  <sch:assert test="matches(normalize-space(.), '^(0(\.[0-9]+)?|1(\.0+)?)$')">A
+                    confidence is a number from 0 to 1.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchor']">
+                  <sch:assert
+                    test="starts-with(normalize-space(.), '#') and //*[@xml:id = substring-after(normalize-space(current()), '#')]"
+                    >An ornamentAnchor is a reference of the form '#id' resolving to an element of
+                    this document.</sch:assert>
+                </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
+                  <sch:assert
+                    test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An
+                    ornamentAnchorFrom says whether the model named the anchor ('model'), whether an
+                    ornament sign in the score settled a ranking the model was unsure of
+                    ('model-and-sign'), or whether it was guessed from the timing
+                    ('timing').</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+          </elementSpec>
+
+          <elementSpec ident="music" module="MEI.shared" mode="change">
+            <constraintSpec ident="music-carries-a-performance" scheme="schematron" mode="add">
+              <constraint>
+                <sch:rule context="mei:music">
+                  <sch:assert test="mei:performance/mei:recording">An as-played-by document records
+                    at least one performance, so its music holds a performance with a recording in
+                    it.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+          </elementSpec>
+
+        </schemaSpec>
+      </div>
+    </body>
+  </text>
+</TEI>

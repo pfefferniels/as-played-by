@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="../odd/as-played-by.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="../odd/as-played-by.sch" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
+   <meiHead>
+      <fileDesc>
+         <titleStmt>
+            <title>The five shapes a when can take</title>
+         </titleStmt>
+         <pubStmt>
+            <availability>
+               <useRestrict>Part of the as-played-by customization.</useRestrict>
+            </availability>
+         </pubStmt>
+      </fileDesc>
+      <manifestationList>
+         <manifestation xml:id="take-1">
+            <physDesc>
+               <p>An invented take, written by hand to show every shape at least once.</p>
+            </physDesc>
+         </manifestation>
+      </manifestationList>
+   </meiHead>
+   <music>
+      <performance>
+         <recording source="#take-1">
+
+            <!-- The pedal goes down before the first note and is held over the first bar. -->
+            <when xml:id="w-ped" absolute="0ms" abstype="smil" type="sustain">
+               <extData type="duration">1980ms</extData>
+            </when>
+
+            <!-- A match: a written note that sounded. -->
+            <when xml:id="w-1" absolute="0ms" abstype="smil" corresp="ev-0001" data="#n-1"
+               type="match">
+               <extData type="velocity">64</extData>
+               <extData type="duration">470ms</extData>
+               <extData type="onsetTicks">0</extData>
+               <extData type="durationTicks">470</extData>
+            </when>
+
+            <!-- An insertion: a note that sounded without being written. Here it decorates the
+                 note that follows, which the ornament fields record. -->
+            <when xml:id="w-orn" absolute="470ms" abstype="smil" corresp="ev-0002" type="insertion">
+               <extData type="pitch">64</extData>
+               <extData type="velocity">48</extData>
+               <extData type="duration">30ms</extData>
+               <extData type="onsetTicks">470</extData>
+               <extData type="durationTicks">30</extData>
+               <extData type="confidence">0.91</extData>
+               <extData type="ornamentAnchor">#n-2</extData>
+               <extData type="ornamentAnchorFrom">model-and-sign</extData>
+               <extData type="ornamentAnchorConfidence">0.87</extData>
+               <extData type="ornamentAnchorConfidenceOf">anchor-given-insertion</extData>
+               <extData type="ornamentSlot">0</extData>
+            </when>
+
+            <when xml:id="w-2" absolute="500ms" abstype="smil" corresp="ev-0003" data="#n-2"
+               type="match">
+               <extData type="velocity">70</extData>
+               <extData type="duration">480ms</extData>
+               <extData type="onsetTicks">500</extData>
+               <extData type="durationTicks">480</extData>
+            </when>
+
+            <!-- A deletion: a written note that was never played. It has no moment. -->
+            <when xml:id="w-3" data="#n-3" type="deletion">
+               <extData type="confidence">0.78</extData>
+               <extData type="reading">Passed over in this take.</extData>
+               <extData type="resp">#NP</extData>
+               <extData type="certainty">medium</extData>
+            </when>
+
+            <!-- A substitution: the written f' sounded as f sharp. -->
+            <when xml:id="w-4" absolute="1500ms" abstype="smil" corresp="ev-0004" data="#n-4"
+               type="substitution">
+               <extData type="pitch">66</extData>
+               <extData type="writtenPitch">65</extData>
+               <extData type="velocity">66</extData>
+               <extData type="duration">460ms</extData>
+               <extData type="onsetTicks">1500</extData>
+               <extData type="durationTicks">460</extData>
+               <extData type="confidence">0.64</extData>
+            </when>
+
+            <when xml:id="w-5" absolute="2000ms" abstype="smil" corresp="ev-0005" data="#n-5"
+               type="match">
+               <extData type="velocity">72</extData>
+               <extData type="duration">960ms</extData>
+               <extData type="onsetTicks">2000</extData>
+               <extData type="durationTicks">960</extData>
+            </when>
+
+            <when xml:id="w-6" absolute="3000ms" abstype="smil" corresp="ev-0006" data="#n-6"
+               type="match">
+               <extData type="velocity">58</extData>
+               <extData type="duration">980ms</extData>
+               <extData type="onsetTicks">3000</extData>
+               <extData type="durationTicks">980</extData>
+            </when>
+
+         </recording>
+      </performance>
+      <body>
+         <mdiv>
+            <score>
+               <scoreDef meter.count="4" meter.unit="4">
+                  <staffGrp>
+                     <staffDef n="1" lines="5" clef.shape="G" clef.line="2"/>
+                  </staffGrp>
+               </scoreDef>
+               <section>
+                  <measure n="1">
+                     <staff n="1">
+                        <layer n="1">
+                           <note xml:id="n-1" pname="c" oct="4" dur="4"/>
+                           <note xml:id="n-2" pname="d" oct="4" dur="4"/>
+                           <note xml:id="n-3" pname="e" oct="4" dur="4"/>
+                           <note xml:id="n-4" pname="f" oct="4" dur="4"/>
+                        </layer>
+                     </staff>
+                     <mordent startid="#n-2" form="upper"/>
+                  </measure>
+                  <measure n="2" right="end">
+                     <staff n="1">
+                        <layer n="1">
+                           <note xml:id="n-5" pname="g" oct="4" dur="2"/>
+                           <note xml:id="n-6" pname="e" oct="4" dur="2"/>
+                        </layer>
+                     </staff>
+                  </measure>
+               </section>
+            </score>
+         </mdiv>
+      </body>
+   </music>
+</mei>

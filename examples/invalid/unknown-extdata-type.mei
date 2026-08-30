@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The extData vocabulary is closed. A writer that invents a type is writing something no reader will look for. -->
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
+   <meiHead>
+      <fileDesc>
+         <titleStmt>
+            <title>An extData type no reader knows</title>
+         </titleStmt>
+         <pubStmt/>
+      </fileDesc>
+      <manifestationList>
+         <manifestation xml:id="take-1">
+            <physDesc>
+               <p>A take.</p>
+            </physDesc>
+         </manifestation>
+      </manifestationList>
+   </meiHead>
+   <music>
+      <performance>
+         <recording source="#take-1">
+            <when xml:id="w-1" absolute="0ms" abstype="smil" data="#n-1" type="match">
+               <extData type="loudness">mf</extData>
+            </when>
+         </recording>
+      </performance>
+      <body>
+         <mdiv>
+            <score>
+               <scoreDef meter.count="4" meter.unit="4">
+                  <staffGrp>
+                     <staffDef n="1" lines="5" clef.shape="G" clef.line="2"/>
+                  </staffGrp>
+               </scoreDef>
+               <section>
+                  <measure n="1" right="end">
+                     <staff n="1">
+                        <layer n="1">
+                           <note xml:id="n-1" pname="c" oct="4" dur="4"/>
+                        </layer>
+                     </staff>
+                  </measure>
+               </section>
+            </score>
+         </mdiv>
+      </body>
+   </music>
+</mei>

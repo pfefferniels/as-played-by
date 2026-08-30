@@ -1,23 +1,306 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Alignment Desk</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>
-      // Handle GitHub Pages SPA redirect
-      (function () {
-        var redirect = sessionStorage.getItem('spa-redirect');
-        if (redirect) {
-          sessionStorage.removeItem('spa-redirect');
-          history.replaceState(null, '', redirect);
-        }
-      })();
-    </script>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>As played by</title>
+  <style>
+    :root {
+      --ink: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --wash: #f9fafb;
+      --hover: #f3f4f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 24px 96px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 12px;
+    }
+
+    .lede {
+      color: var(--muted);
+      max-width: 62ch;
+      margin: 0 0 12px;
+    }
+
+    a {
+      color: inherit;
+      text-underline-offset: 2px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-end;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--wash);
+      margin: 28px 0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    select,
+    input[type="range"] {
+      font: inherit;
+      font-size: 14px;
+      accent-color: var(--ink);
+    }
+
+    select {
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: inherit;
+    }
+
+    select:hover {
+      background: var(--hover);
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .check label {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 400;
+      color: inherit;
+    }
+
+    section {
+      margin-top: 40px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow-x: auto;
+      padding: 8px;
+    }
+
+    .panel svg {
+      display: block;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 68ch;
+      margin: 10px 0 0;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 24px 8px;
+    }
+
+    footer {
+      margin-top: 64px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>As played by</h1>
+    <p class="lede">
+      An MEI customization for recording how a score was played: which written note each sounded
+      event realised, when it was struck, how loud, and where the two disagreed. The record lives in
+      <code>&lt;performance&gt;</code> and travels with the score.
+    </p>
+    <p class="lede">
+      Below, the same music is drawn twice. The upper score is laid out by notated duration, the way
+      any renderer draws it. The lower one is laid out by the times a performance actually took, read
+      out of a <code>&lt;recording&gt;</code> in the same file.
+    </p>
+
+    <div class="controls">
+      <div>
+        <label for="file">Example</label>
+        <select id="file">
+          <option value="demo/transcription.mei">Two piano rolls, aligned</option>
+          <option value="examples/shapes.mei">The five shapes a when can take</option>
+        </select>
+      </div>
+      <div>
+        <label for="take">Take</label>
+        <select id="take"></select>
+      </div>
+      <div>
+        <label for="scale">Seconds to the inch</label>
+        <input id="scale" type="range" min="4" max="40" step="1" value="16" />
+      </div>
+      <div class="check">
+        <input id="velocity" type="checkbox" checked />
+        <label for="velocity">Ink density is velocity</label>
+      </div>
+      <div class="check">
+        <input id="ruler" type="checkbox" checked />
+        <label for="ruler">Show the clock</label>
+      </div>
+    </div>
+
+    <section>
+      <h2>As written</h2>
+      <div class="panel" id="written">
+        <p class="status">Loading verovio…</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>As played</h2>
+      <div class="panel" id="played">
+        <p class="status"></p>
+      </div>
+      <p class="note">
+        Noteheads stand where they were struck rather than where the metre puts them, so the
+        barlines are drawn dashed: they no longer sit at a fixed distance. A note the recording
+        never reached is bracketed.
+      </p>
+    </section>
+
+    <footer>
+      The performed layout is not part of verovio upstream. It comes from the
+      <a href="https://github.com/pfefferniels/verovio">aligned-mei branch</a> of the fork, whose
+      build is committed in this repository. The alignment itself is made in the
+      <a href="https://github.com/pfefferniels/mpm-desk">MPM Desk</a>.
+    </footer>
+  </main>
+
+  <script type="module">
+    import createVerovioModule from './vendor/verovio/dist/verovio-module.mjs';
+    import { VerovioToolkit } from './vendor/verovio/dist/verovio.mjs';
+
+    const MEI_NS = 'http://www.music-encoding.org/ns/mei';
+
+    const controls = {
+      file: document.getElementById('file'),
+      take: document.getElementById('take'),
+      scale: document.getElementById('scale'),
+      velocity: document.getElementById('velocity'),
+      ruler: document.getElementById('ruler'),
+    };
+    const panels = {
+      written: document.getElementById('written'),
+      played: document.getElementById('played'),
+    };
+
+    const shared = {
+      adjustPageHeight: true,
+      adjustPageWidth: true,
+      header: 'none',
+      footer: 'none',
+      scale: 55,
+      svgHtml5: true,
+    };
+
+    /** Every page of the currently loaded document, drawn one below the other. */
+    const renderInto = (panel, toolkit, mei, options) => {
+      toolkit.setOptions({ ...shared, ...options });
+      toolkit.loadData(mei);
+      const pages = Array.from({ length: toolkit.getPageCount() }, (_, i) => toolkit.renderToSVG(i + 1));
+      panel.innerHTML = pages.join('');
+    };
+
+    /** The takes a document offers, in the order a reader meets them. */
+    const takesIn = (mei) => {
+      const doc = new DOMParser().parseFromString(mei, 'application/xml');
+      return Array.from(doc.getElementsByTagNameNS(MEI_NS, 'recording')).map((recording, index) => ({
+        value: recording.getAttribute('source') ?? String(index + 1),
+        label: `Take ${index + 1}`,
+      }));
+    };
+
+    const fillTakes = (takes) => {
+      controls.take.innerHTML = '';
+      takes.forEach(({ value, label }) => controls.take.add(new Option(label, value)));
+      controls.take.disabled = takes.length < 2;
+    };
+
+    const module = await createVerovioModule();
+    const written = new VerovioToolkit(module);
+    const played = new VerovioToolkit(module);
+
+    let mei = '';
+
+    const drawPerformance = () => {
+      renderInto(panels.played, played, mei, {
+        performanceAlignment: true,
+        performanceRecording: controls.take.value,
+        performanceScale: Number(controls.scale.value),
+        performanceVelocityOpacity: controls.velocity.checked,
+        performanceRuler: controls.ruler.checked,
+        performanceUnmatched: 'mark',
+        pageMarginBottom: controls.ruler.checked ? 150 : 50,
+        pageMarginRight: 100,
+      });
+    };
+
+    const load = async () => {
+      panels.played.innerHTML = '<p class="status">Rendering…</p>';
+      mei = await fetch(controls.file.value).then((response) => response.text());
+      fillTakes(takesIn(mei));
+      renderInto(panels.written, written, mei, { breaks: 'auto', pageWidth: 2100 });
+      drawPerformance();
+    };
+
+    controls.file.addEventListener('change', load);
+    ['take', 'scale', 'velocity', 'ruler'].forEach((name) =>
+      controls[name].addEventListener('input', drawPerformance)
+    );
+
+    await load();
+  </script>
+</body>
+
 </html>
