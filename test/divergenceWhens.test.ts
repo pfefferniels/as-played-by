@@ -5,6 +5,7 @@ import { join } from 'path'
 import type { MidiFile } from 'midifile-ts'
 import { applyAlignment } from '../src/alignment/applyAlignment'
 import { parseRecordings } from '../src/mei/parseRecordings'
+import { ORNAMENT_ANCHOR_CONFIDENCE_OF } from '../src/mei/when'
 import { buildMidiFile } from '../src/performance/buildMidiFile'
 import { asSpans, type NoteSpan } from '../src/performance/midiSpans'
 import { loadVerovio, renderPerformance } from '../src/verovio/toolkit'
@@ -137,6 +138,53 @@ describe('writing divergences into the recording', () => {
     })
 
     expect(result).not.toContain('ornamentAnchorFrom')
+  })
+
+  /**
+   * An edition outlives the code that wrote it, and this number has changed
+   * meaning once already: it used to carry the match head's P(insertion) too.
+   * Both readings are probabilities and the newer is always the larger, so
+   * without a token beside it a reader has nothing to tell them apart by.
+   */
+  it('names which quantity the anchor confidence is', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [added([spans[0].id], scoreId)],
+    })
+
+    const found = divergencesIn(result).find((d) => d.kind === 'insertion')
+    expect(found?.ornamentAnchorConfidenceOf).toBe(ORNAMENT_ANCHOR_CONFIDENCE_OF)
+    expect(found?.ornamentAnchorConfidenceOf).toBe('anchor-given-insertion')
+  })
+
+  it('never writes the number without saying which number it is', () => {
+    const result = applyAlignment(mei, midi, [], {
+      divergences: [added([spans[0].id], scoreId), added([spans[1].id], null)],
+    })
+
+    const numbers = result.match(/type="ornamentAnchorConfidence"/g) ?? []
+    const labels = result.match(/type="ornamentAnchorConfidenceOf"/g) ?? []
+    expect(numbers.length).toBeGreaterThan(0)
+    expect(labels).toHaveLength(numbers.length)
+  })
+
+  /**
+   * The point of the token is that a file predating it still reads, and reads
+   * as the older quantity. Absence is the reading, not a gap to be filled in.
+   */
+  it('reads a file written before the token, and leaves it unlabelled', () => {
+    const withToken = applyAlignment(mei, midi, [], {
+      divergences: [added([spans[0].id], scoreId)],
+    })
+    const asItWasWritten = withToken.replace(
+      /\s*<extData type="ornamentAnchorConfidenceOf">[^<]*<\/extData>/g,
+      ''
+    )
+    expect(asItWasWritten).not.toContain('ornamentAnchorConfidenceOf')
+
+    const found = divergencesIn(asItWasWritten).find((d) => d.kind === 'insertion')
+    expect(found?.ornamentAnchorConfidenceOf).toBeUndefined()
+    expect(found?.ornamentAnchorConfidence).toBeCloseTo(0.88, 3)
+    expect(found?.ornamentAnchor).toBe(scoreId)
   })
 
   it('leaves out a deletion against a note the document does not hold', () => {

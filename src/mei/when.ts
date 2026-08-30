@@ -88,6 +88,28 @@ export interface WhenReading {
 }
 
 /**
+ * Which quantity `ornamentAnchorConfidence` holds, written beside it.
+ *
+ * An edition outlives the code that wrote it, and this number has already
+ * changed meaning once. It used to be the attribution head's whole-row mass,
+ * which also carried the match head's P(insertion); it is now the head's own two
+ * factors, asked of a played note the alignment had already given up on pairing.
+ * Both are probabilities in [0, 1] and the second is always the larger, so a
+ * reader comparing two files has nothing to tell them apart by.
+ *
+ * Hence a token naming the quantity rather than a version. A version number
+ * needs a changelog to mean anything; this says what was measured, and stays
+ * legible on its own.
+ *
+ * **Absent means the older quantity.** A file written before this token existed
+ * must keep parsing exactly as it did, and there is no way to add the token to
+ * one retrospectively without knowing which code wrote it. So absence is not
+ * "unknown", it is the reading, and nothing should ever write the old value's
+ * name - it exists only as the default.
+ */
+export const ORNAMENT_ANCHOR_CONFIDENCE_OF = "anchor-given-insertion";
+
+/**
  * A played note with no note in the score.
  *
  * It has no `@data`, because there is nothing in the score for it to point at -
@@ -143,8 +165,11 @@ export const insertInsertionWhen = (
     if (extra.ornamentAnchor && extra.ornamentAnchorFrom) {
         extData(doc, when, "ornamentAnchorFrom", extra.ornamentAnchorFrom);
     }
+    // The two go together or not at all: an unlabelled number is the thing this
+    // token exists to stop, so there is no path that writes one without it.
     if (extra.ornamentAnchorConfidence !== undefined) {
         extData(doc, when, "ornamentAnchorConfidence", extra.ornamentAnchorConfidence.toFixed(3));
+        extData(doc, when, "ornamentAnchorConfidenceOf", ORNAMENT_ANCHOR_CONFIDENCE_OF);
     }
     if (extra.ornamentSlot !== undefined) {
         extData(doc, when, "ornamentSlot", extra.ornamentSlot.toString());

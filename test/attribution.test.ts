@@ -299,6 +299,60 @@ describe('the factored attribution row (v3)', () => {
   })
 })
 
+/**
+ * The third number, and the one the decode acts on.
+ *
+ * `confidence` and `share` are both read off the row. The gate is not, and that
+ * is the whole point of it: the row has been through the match head and the gate
+ * has not, so for a played note the decode has already ruled an insertion the
+ * gate is the only one of the three still answering the question that was asked.
+ */
+describe('the gate, which is what survives a decoded insertion', () => {
+  it('is the sigmoid of the accumulated logit, straight from the graph', () => {
+    const found = attributionsOf(factored(2, 1, [[2, 0]], [1.5], [[0], [0]], [0]))
+
+    expect(found.get(0)!.gate).toBeCloseTo(1 / (1 + Math.exp(-1.5)), 12)
+  })
+
+  it('does not move when the match head does, though the row mass does', () => {
+    // Two played notes, same head and same ranking, opposite verdicts from the
+    // match head: nullP 6 is an insertion it is content with, -6 one it is sure
+    // it matched. The second is the vetoed note, and its gate is the first's.
+    const found = attributionsOf(
+      factored(2, 2, [[2, 0], [2, 0]], [1.5, 1.5], [[0, 0], [0, 0]], [6, -6])
+    )
+
+    expect(found.get(1)!.gate).toBeCloseTo(found.get(0)!.gate, 12)
+    expect(found.get(1)!.confidence).toBeLessThan(found.get(0)!.confidence / 100)
+  })
+
+  it('does not move with the ranking either, which is why both are reported', () => {
+    // A gate can be confident over a ranking that is not, and the two together
+    // are what an acceptance test asks. Nothing is decided here; `share` is
+    // reported beside the gate so that `../divergences` can decide.
+    const of = (attr: number[]) =>
+      attributionsOf(factored(3, 1, [attr], [0.8], [[0], [0], [0]], [0])).get(0)!
+    const sharp = of([6, 0, 0])
+    const flat = of([0.1, 0, 0])
+
+    expect(sharp.gate).toBeCloseTo(flat.gate, 12)
+    expect(sharp.share).toBeGreaterThan(flat.share)
+    expect(flat.share).toBeLessThan(0.4)
+  })
+
+  it('falls back on the row before v3, where there is no such tensor', () => {
+    // v1 and v2 have only the row, so the gate is what the row says once the
+    // "not an ornament" column is set aside - the same fallback the Python
+    // takes for an unconditioned head.
+    const found = attributionsOf(bundle(3, 1, [[1, 4, 1]], [9]))
+
+    const cells = [1, 4, 1, 9].map(Math.exp)
+    const total = cells.reduce((sum, v) => sum + v, 0)
+    expect(found.get(0)!.gate).toBeCloseTo((total - cells[3]) / total, 10)
+    expect(found.get(0)!.gate).toBeLessThan(0.01)
+  })
+})
+
 /** The same fake head, exported as a `"factored"` graph would export it. */
 const factoredSession = (): MlignSession => {
   const base = attributingSession()

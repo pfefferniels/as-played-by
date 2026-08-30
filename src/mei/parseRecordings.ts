@@ -30,6 +30,15 @@ export interface RecordedDivergence {
     /** Whether the model named that anchor or the timing was guessed from */
     ornamentAnchorFrom?: string;
     ornamentAnchorConfidence?: number;
+    /**
+     * Which quantity `ornamentAnchorConfidence` holds, where the file says.
+     *
+     * Absent is not "unknown", it is the reading: a file written before this
+     * token existed holds the older quantity, the attribution head's whole-row
+     * mass, which also carries the match head's P(insertion) and is therefore
+     * the smaller of the two. See `ORNAMENT_ANCHOR_CONFIDENCE_OF` in `./when`.
+     */
+    ornamentAnchorConfidenceOf?: string;
     ornamentSlot?: number;
 }
 
@@ -106,6 +115,7 @@ export function parseRecordings(mei: string): {
             let writtenPitch: number | undefined;
             let ornamentAnchorFrom: string | undefined;
             let ornamentAnchorConfidence: number | undefined;
+            let ornamentAnchorConfidenceOf: string | undefined;
 
             for (let i = 0; i < extDatas.length; i++) {
                 const ext = extDatas[i];
@@ -126,6 +136,8 @@ export function parseRecordings(mei: string): {
                 else if (etype === "ornamentAnchorFrom") ornamentAnchorFrom = text;
                 else if (etype === "ornamentAnchorConfidence")
                     ornamentAnchorConfidence = parseFloat(text);
+                else if (etype === "ornamentAnchorConfidenceOf")
+                    ornamentAnchorConfidenceOf = text;
             }
 
             // A written note that was never played: a note and no moment.
@@ -167,6 +179,7 @@ export function parseRecordings(mei: string): {
                     ornamentAnchor,
                     ornamentAnchorFrom,
                     ornamentAnchorConfidence,
+                    ornamentAnchorConfidenceOf,
                     ornamentSlot,
                 });
                 continue;

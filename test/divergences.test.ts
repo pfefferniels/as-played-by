@@ -33,6 +33,19 @@ const span = (id: string, onsetMs: number, pitch: number): NoteSpan => ({
 const trill: OrnamentSign = { name: 'trill', id: 'tr1', form: null }
 
 /**
+ * What the head said about one played note: an id on its own for an answer it is
+ * sure of, or the numbers spelled out.
+ *
+ * `confidence` is separable from the other two because that is where the match
+ * head's veto lands, and a note it vetoed is the case the acceptance rule is
+ * about. Left out, it is what the two remaining factors come to, which is what a
+ * fixture with no match head in it should say.
+ */
+type Said =
+  | string
+  | [scoreId: string, gate: number, share: number, confidence?: number]
+
+/**
  * A small alignment: two written notes, both played, plus whatever extra played
  * notes and unplayed written notes a case needs.
  */
@@ -41,8 +54,7 @@ const build = (opts: {
   spans?: NoteSpan[]
   matches?: { scoreId: string; performanceId: string }[]
   insertions?: string[]
-  /** What the model says each played note ornaments: id, or [id, confidence, share] */
-  ornamentOf?: Record<string, string | [string, number, number]>
+  ornamentOf?: Record<string, Said>
   deletions?: string[]
   signs?: [string, OrnamentSign[]][]
   hasRepeats?: boolean
@@ -64,9 +76,11 @@ const build = (opts: {
         ...(() => {
           const said = opts.ornamentOf?.[performanceId]
           if (!said) return {}
-          const [scoreId, confidence, share] =
-            typeof said === 'string' ? [said, 0.9, 0.95] : said
-          return { ornamentOf: { scoreId, confidence, share } }
+          const [scoreId, gate, share, confidence] =
+            typeof said === 'string' ? [said, 0.9, 0.95, undefined] : said
+          return {
+            ornamentOf: { scoreId, confidence: confidence ?? gate * share, share, gate },
+          }
         })(),
       })),
       scoreNotes,
@@ -465,7 +479,8 @@ describe('what the model says a played note ornaments', () => {
     const added = addedOnes(all)
     expect(added[0].anchorId).toBe('n1')
     expect(added[0].anchorFrom).toBe('model')
-    expect(added[0].anchorConfidence).toBeCloseTo(0.9, 5)
+    // Reported for the anchor, so it is both halves: a .9 gate over a .95 share
+    expect(added[0].anchorConfidence).toBeCloseTo(0.855, 5)
   })
 
   it('falls back on the timing where the model declined to say', () => {
@@ -523,7 +538,8 @@ describe('what the model says a played note ornaments', () => {
 
     const added = addedOnes(all)
     expect(added[0].reading).toBe('ornamentation')
-    expect(added[0].because).toContain('90% sure')
+    // The sentence is about ornamenting THAT note, so it reports both halves
+    expect(added[0].because).toContain('86% sure')
   })
 
   it('still reads a sign the score writes as that sign, and says the model agrees', () => {
@@ -595,7 +611,7 @@ describe('how sure the attribution head has to be', () => {
    * and it is nowhere near the edges of what the recording covers.
    */
   const withExtra = (opts: {
-    ornamentOf?: Record<string, string | [string, number, number]>
+    ornamentOf?: Record<string, Said>
     signs?: [string, OrnamentSign[]][]
   }) =>
     build({
@@ -660,5 +676,113 @@ describe('how sure the attribution head has to be', () => {
 
     expect(addedOnes(all)[0].anchorFrom).toBe('model')
     expect(addedOnes(all)[0].anchorCorroborated).toBe(false)
+  })
+
+  /**
+   * The case the whole change is about. The match head is sure it matched this
+   * played note, so the head's own row puts almost no mass on it being an
+   * ornament - but the decode tried to pair it, failed, and called it an
+   * insertion. Asking the row again would be asking the match head to overrule
+   * a decision it has already lost. On real Batik this is 48.8% of all ornament
+   * figures.
+   */
+  it('takes a note the match head vetoed, the decode having already overruled it', () => {
+    const all = withExtra({ ornamentOf: { x1: ['n1', 0.9, 0.95, 0.02] } })
+
+    const added = addedOnes(all)[0]
+    expect(added.anchorId).toBe('n1')
+    expect(added.anchorFrom).toBe('model')
+    expect(added.anchorCorroborated).toBe(false)
+  })
+
+  it('drops one whose gate is low however clear the ranking under it is', () => {
+    const all = withExtra({ ornamentOf: { x1: ['n1', 0.15, 0.99] } })
+
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  /**
+   * The other half of the joint test, and the reason it is joint. A gate can be
+   * sure there is an ornament here while the ranking under it cannot say which
+   * written note it belongs to, and the argmax of a flat ranking is how a played
+   * note that decorates nothing acquires an anchor anyway. Asking the gate alone
+   * would take this one.
+   */
+  it('drops a confident gate whose ranking cannot choose a note', () => {
+    const all = withExtra({ ornamentOf: { x1: ['n1', 0.9, 0.15] } })
+
+    expect(addedOnes(all)[0].anchorFrom).toBe('timing')
+  })
+
+  /**
+   * The number it was taken on and the number written down are the same number,
+   * and that is worth fixing rather than leaving to coincidence: it is what lets
+   * the MEI hold a probability meaning what the sentence beside it says.
+   */
+  it('reports the very number it accepted the anchor on', () => {
+    const all = withExtra({ ornamentOf: { x1: ['n1', 0.9, 0.4] } })
+
+    const added = addedOnes(all)[0]
+    expect(added.anchorFrom).toBe('model')
+    expect(added.anchorConfidence).toBeCloseTo(0.9 * 0.4, 10)
+    expect(added.anchorConfidence!).toBeGreaterThanOrEqual(0.2)
+    expect(added.because).toContain('36% sure')
+  })
+
+  it('tells the reader how sure it was these are ornaments at all, which is the gate', () => {
+    const all = withExtra({
+      ornamentOf: { x1: unsure('n1') },
+      signs: [['n1', [trill]]],
+    })
+
+    expect(addedOnes(all)[0].because).toContain('6% sure they are ornaments at all')
+  })
+
+  /**
+   * What accepting more notes costs, pinned from both sides.
+   *
+   * An accepted anchor does not only name a written note, it widens the silence
+   * that still counts as one figure from `gapMs` to `attributedGapMs` - 250 ms
+   * to a second. So a note that newly becomes accepted can also merge two events
+   * that used to be reported separately, and that is the change a reader is most
+   * likely to notice. It is wanted: a broad ornament on an early recording runs
+   * well past 250 ms and splitting it there is the mistake the head exists to
+   * stop. Both halves are fixed here so that neither moves unremarked.
+   */
+  const twoExtras = (ornamentOf?: Record<string, Said>) =>
+    build({
+      scoreNotes: [scoreNote('n1', 0, 60), scoreNote('n2', 4, 67), scoreNote('n3', 8, 72)],
+      spans: [
+        span('p1', 0, 60),
+        span('p2', 2000, 67),
+        span('p3', 4000, 72),
+        span('x1', 2100, 68),
+        span('x2', 2700, 69),
+      ],
+      matches: [
+        { scoreId: 'n1', performanceId: 'p1' },
+        { scoreId: 'n2', performanceId: 'p2' },
+        { scoreId: 'n3', performanceId: 'p3' },
+      ],
+      insertions: ['x1', 'x2'],
+      ornamentOf,
+    })
+
+  it('joins two accepted notes 600 ms apart into one figure', () => {
+    // Both vetoed by the match head, so neither was believed before the change
+    const added = addedOnes(
+      twoExtras({ x1: ['n1', 0.9, 0.95, 0.02], x2: ['n1', 0.9, 0.95, 0.02] })
+    )
+
+    expect(added).toHaveLength(1)
+    expect(added[0].perfIds).toEqual(['x1', 'x2'])
+    expect(added[0].anchorId).toBe('n1')
+  })
+
+  it('still splits the same two where the head declined to name a note', () => {
+    const added = addedOnes(twoExtras())
+
+    expect(added).toHaveLength(2)
+    expect(added.map((d) => d.anchorFrom)).toEqual(['timing', 'timing'])
   })
 })

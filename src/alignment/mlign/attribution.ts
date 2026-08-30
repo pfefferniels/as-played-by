@@ -61,6 +61,47 @@
  * over windows. It is a nonlinear function of a whole row, so conditioning each
  * window and averaging the results is a different quantity - which is why
  * `accumulate.ts` keeps `attr`, `attrNone` and `attrGate` raw.
+ *
+ * ## The row's own argmax is not the answer, once the decode has spoken
+ *
+ * Reading the row and taking its largest entry is the head's answer, and it is
+ * dominated by the match head. The "not an ornament" column carries
+ * `log_matched` and the ornament side carries `log_ins`, so either way a played
+ * note the match head believes it has matched is silenced whatever the
+ * attribution head thinks. Measured on real Batik that silences 48.8% of all
+ * ornament figures, and on those the head scores .0000 - not because it does not
+ * know the answer but because it is never allowed to give it. Take the match
+ * head's contribution back out and it names the right written note for 85% of
+ * exactly those notes.
+ *
+ * The decode does not need the match head's opinion here, because it has already
+ * formed its own and disagreed. A played note reaches `../divergences` as an
+ * insertion precisely when the per-pitch monotone assignment paired it with
+ * nothing, so for that note `P(matched)` is not an estimate left to weigh, it is
+ * settled at zero. What survives is the two questions the attribution head was
+ * trained to answer:
+ *
+ *     P(anchor = i | insertion) = P(elaborates something | insertion) x P(i | that)
+ *
+ * which are `gate` and `share` below, and their product is what a decoder
+ * thresholds. Both were already here: `share` has always been the ranking alone,
+ * and the gate is a tensor the graph emits. What was missing is that the
+ * acceptance test ran on `confidence`, which carries `P(insertion)` and so
+ * carries the veto with it. On the checkpoint this app ships that costs
+ * whole-figure accuracy .1919 against .3297 on real Batik, with no change to
+ * the model.
+ *
+ * Batik is the number, and the only one. 209 of real ASAP's 225 rows are
+ * performances the match head was trained on, so every pooled ASAP figure in
+ * MLign's record overstates; the clean remainder is 36 figures, indicative at
+ * best. And whole-figure accuracy alone cannot tell better from louder, since
+ * attributing more can only raise it - read it against how much of what was
+ * called an ornament was really a matched note, which on Batik is .0891.
+ *
+ * `confidence` stays, because it is what the head itself says and because a v1
+ * or v2 row has nothing else to give. It is no longer the number to decide on.
+ * The reference is MLign `src/mlign/infer.py`: `Ornaments`, and the threshold
+ * `ORNAMENT_MIN_PROB`.
  */
 
 import type { SimBundle } from "./types";
@@ -69,16 +110,20 @@ import { LOG_FLOOR, UNCOVERED_SIM } from "./types";
 /**
  * What the head says about one played note.
  *
- * Two numbers, because the head is answering two questions at once and they can
- * come apart. `confidence` is the whole row's mass on this answer, so it is
- * "this is an ornament, and it is that note's". `share` conditions on the first
- * half: of the mass the head did put on ornamenting *something*, how much sits
- * on this one written note.
+ * Three numbers, because the head is answering two questions at once and the
+ * answers can come apart, and because how much of the first question the match
+ * head is allowed to answer is itself a choice.
  *
- * They mean the same two things under either model, which is what lets the rest
- * of the app stay as it was. What changed in v3 is that the first of them is
- * now calibrated against the alignment rather than against the head's own guess
- * at whether a note was an insertion.
+ * `confidence` is the whole row's mass on this answer, so it is "this is an
+ * ornament, and it is that note's", with the match head's verdict folded in.
+ * `gate` asks the same first half of that with the match head taken out: given
+ * that this played note is an insertion, does it elaborate a written note at
+ * all. `share` is the second half: of the mass on elaborating anything, how much
+ * sits on this one written note.
+ *
+ * All three mean the same thing under every checkpoint, which is what lets the
+ * rest of the app stay as it was. What v3 changed is how the first is arrived
+ * at; what the decode changes is which of them is worth deciding on.
  */
 export interface Attributed {
     /** Index into the score table of the note it most likely ornaments. */
@@ -87,6 +132,21 @@ export interface Attributed {
     confidence: number;
     /** That note's share of the mass on ornamenting anything at all. */
     share: number;
+    /**
+     * P(this elaborates a written note at all | it is an insertion).
+     *
+     * The half of the answer the match head cannot veto. Multiplied by `share`,
+     * which is the other half, it is what a decoder thresholds a decoded
+     * insertion on. Kept apart from it here rather than multiplied in, because
+     * the two are separately worth saying and only the caller knows which it
+     * wants.
+     *
+     * Under v3 it is the head's own gate, read from the graph. Under v1 and v2
+     * there is no such tensor and it is what the row itself says once the "not
+     * an ornament" column is set aside, which is the same fallback the Python
+     * takes for an unconditioned head.
+     */
+    gate: number;
 }
 
 /**
@@ -235,7 +295,7 @@ const SIM_DIRECTIONS = 2;
  * did not decline to attribute it, it was never asked.
  */
 export function attributionsOf(bundle: SimBundle): Map<number, Attributed> {
-    const { n, m, attr, attrNone } = bundle;
+    const { n, m, attr, attrNone, attrGate } = bundle;
     const found = new Map<number, Attributed>();
     if (!attr || !attrNone) return found;
 
@@ -257,10 +317,19 @@ export function attributionsOf(bundle: SimBundle): Map<number, Attributed> {
         // The row is a log-distribution, so the whole-row number is one `exp`
         // and the share is that same mass measured against the ornament half of
         // the row rather than against all of it.
+        const ornament = logSumExp(row, n);
         found.set(j, {
             scoreIdx: best,
             confidence: Math.exp(bestLogp),
-            share: Math.exp(bestLogp - logSumExp(row, n)),
+            share: Math.exp(bestLogp - ornament),
+            // Straight from the graph where there is one, because rebuilding it
+            // from the row is exactly the mistake: the row's ornament half has
+            // been through the match head and the gate has not. Without the
+            // tensor the row is all there is, and its two halves are then the
+            // only answer available.
+            gate: attrGate
+                ? sigmoid(attrGate[j])
+                : Math.exp(ornament - logSumExp(row)),
         });
     }
 
@@ -295,4 +364,11 @@ function logAddExp(a: number, b: number): number {
 /** `log(sigmoid(x))`, taking the branch that keeps `exp` below 1 either way. */
 function logSigmoid(x: number): number {
     return x >= 0 ? -Math.log1p(Math.exp(-x)) : x - Math.log1p(Math.exp(x));
+}
+
+/** `sigmoid(x)`, by the same two branches, so neither tail overflows. */
+function sigmoid(x: number): number {
+    if (x >= 0) return 1 / (1 + Math.exp(-x));
+    const e = Math.exp(x);
+    return e / (1 + e);
 }

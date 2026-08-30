@@ -115,15 +115,18 @@ export interface InsertedNote {
      * column, so a note being an insertion and a note decorating a written note
      * are compatible facts, not competing ones.
      *
-     * Two numbers, and they mean different things: `confidence` is that this is
-     * an ornament and that it is that note's, `share` is that if it ornaments
-     * anything then it is that note. They mean that under every checkpoint —
-     * what v3 changed is how the first of them is arrived at, not what it says.
-     * Absent only when the model has no attribution head, or when no window
-     * covered this note — what counts as sure enough is `../divergences`'s
-     * judgement, not this module's. See `./attribution`.
+     * Three numbers, and they mean different things. `confidence` is that this
+     * is an ornament and that it is that note's. `gate` is the first half of
+     * that with the match head taken back out, which is the half that still
+     * means something once the decode has called this note an insertion.
+     * `share` is the second half: if it ornaments anything then it is that note.
+     * They mean that under every checkpoint — what v3 changed is how they are
+     * arrived at, not what they say. Absent only when the model has no
+     * attribution head, or when no window covered this note — what counts as
+     * sure enough is `../divergences`'s judgement, not this module's, and this
+     * reports all three rather than choosing between them. See `./attribution`.
      */
-    ornamentOf?: { scoreId: string; confidence: number; share: number };
+    ornamentOf?: { scoreId: string; confidence: number; share: number; gate: number };
 }
 
 /** What the alignment cost, for a status line and for reporting. */
@@ -155,7 +158,7 @@ export interface AlignOptions {
      *
      * The older models remain correct: they align identically, and the only
      * thing that changes with the choice is how much the ornament attribution
-     * is worth. Nothing downstream needs to know which one ran — the two
+     * is worth. Nothing downstream needs to know which one ran — the three
      * numbers on `ornamentOf` mean the same thing under all of them.
      */
     model?: MlignModelId;
@@ -337,6 +340,7 @@ export async function alignScoreToPerformance(
                               scoreId: score[attributed.scoreIdx].id,
                               confidence: attributed.confidence,
                               share: attributed.share,
+                              gate: attributed.gate,
                           },
                       }
                     : {}),

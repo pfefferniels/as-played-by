@@ -87,7 +87,23 @@ export interface AddedDivergence {
      * for anything that leans on the note it precedes.
      */
     anchorFrom: "model" | "timing" | null;
-    /** How sure the head was, when it is the head that answered */
+    /**
+     * How sure the head was that this figure ornaments *that* written note,
+     * given that the alignment could not pair it with anything.
+     *
+     * Both halves of the head's answer multiplied together, which is the one
+     * form of it that is about the anchor. The gate alone is one number for a
+     * whole figure and does not change when the anchor does; the ranking alone
+     * says nothing about whether there is an ornament to anchor. This is also
+     * what goes into the MEI, where it sits beside `ornamentAnchor` and has to
+     * mean what that pairing implies.
+     *
+     * It is what the note was accepted on, except where an engraved sign let a
+     * clear ranking in that this number alone would have turned away. There
+     * `anchorCorroborated` is set, and the two say different things on purpose:
+     * this stays low, because the head was unsure, and the sign is the reason
+     * the answer was taken anyway.
+     */
     anchorConfidence?: number;
     /**
      * Whether an ornament sign the score already writes is what let a ranking
@@ -168,11 +184,27 @@ export interface DivergenceOptions {
      */
     attributedGapMs?: number;
     /**
-     * How sure the attribution head must be, on its own, before its answer is
-     * taken: mass on "this ornaments that written note", against everything
-     * else including the note not being an ornament at all.
+     * How sure the head must be, on its own, before its answer is taken:
+     * P(this elaborates *that* written note), given that the decode has already
+     * ruled it an insertion. Both halves of the head's answer, multiplied.
+     *
+     * What it must not be is the whole row's mass, which carries P(insertion)
+     * and with it the match head's opinion. That opinion is not evidence here:
+     * every note this is asked about is one the decode tried to pair and could
+     * not. Letting it in silences 48.8% of ornament figures on real Batik, on
+     * which the head would have named the right written note for 85% of them.
+     *
+     * Both halves rather than the gate alone, and .2 rather than a half,
+     * because that is what measured best. Eight rules were swept on both real
+     * corpora; against the nearest rival, a gate thresholded at .5, this one
+     * wins on whole-figure accuracy and on false positives at the same time.
+     * On Batik, the clean corpus, .3730 -> .3757 whole-figure and, of
+     * everything called an ornament, the share that was really a matched note
+     * .0902 -> .0891. ASAP moves the same way on both. Nothing got worse
+     * anywhere, which is what settled it. The constant is MLign's
+     * `ORNAMENT_MIN_PROB` and the two have to move together.
      */
-    attributionConfidence?: number;
+    attributionPosterior?: number;
     /**
      * How sure it must be when the score corroborates it - when the written note
      * it named is one the score already puts an ornament sign on. Lower, and
@@ -203,7 +235,7 @@ const DEFAULTS = {
     figureNotes: 3,
     hasRepeats: false,
     attributedGapMs: 1000,
-    attributionConfidence: 0.35,
+    attributionPosterior: 0.2,
     attributionShare: 0.5,
     replacementMs: 200,
     replacementSemitones: 12,
@@ -236,7 +268,19 @@ interface PlayedGroup {
 /** The head's answer about one played note, once it has been believed. */
 interface AcceptedAnchor {
     scoreId: string;
-    confidence: number;
+    /** P(it elaborates a written note at all), the decode having called it an insertion */
+    gate: number;
+    /** Of the mass on elaborating anything, the part on this one written note */
+    share: number;
+    /**
+     * The two together: P(it elaborates THAT written note | it is an insertion).
+     *
+     * Both the number decided on and the number written down, which is the point
+     * of it: it is the only one of the three that is about the anchor. A gate is
+     * one number for a whole figure and does not move when the anchor does, and
+     * a share says nothing about whether there is an ornament to anchor.
+     */
+    posterior: number;
     /** Whether an ornament sign the score already writes is what let it in */
     corroborated: boolean;
 }
@@ -261,25 +305,43 @@ interface AcceptedAnchor {
  * again, so its confidences are on a footing its predecessor's were not, and
  * the second route should fire far less often. Both stay: the route is chosen
  * per note by what the numbers are, never by which model produced them, so this
- * reads a v1, v2 or v3 answer without being told which it has. The thresholds
- * below were set against v2 and have not been re-measured on v3 - they are
- * conservative for it rather than wrong, since the change moves a real
- * ornament's confidence up.
+ * reads a v1, v2 or v3 answer without being told which it has.
+ *
+ * The first route asks the head's two own factors, not the whole row's mass.
+ * Every note here is one the decode has already ruled an insertion, having tried
+ * to pair it with a written note and failed, so `P(insertion)` is not evidence
+ * to be weighed a second time - and the row's mass carries it, which is how the
+ * match head came to veto answers it was never asked for. On real Batik that
+ * veto silences 48.8% of ornament figures. Taking it out is worth, on the
+ * checkpoint this app ships and with no new model, whole-figure accuracy
+ * .1919 -> .3297 there. Batik is the corpus to read and the only clean one:
+ * 209 of real ASAP's 225 rows are performances the match head trained on, so
+ * its pooled figures overstate and its clean remainder is 36 figures.
+ *
+ * Both factors and not the gate alone, because a gate can be confident while the
+ * ranking under it is flat, and taking the argmax of a flat ranking is how a
+ * played note that ornaments nothing acquires an anchor. Multiplying the two is
+ * what MLign's own decoder thresholds, at its `ORNAMENT_MIN_PROB`.
  */
 function acceptAttribution(
     insertion: InsertedNote,
     signs: ReadonlyMap<string, OrnamentSign[]>,
-    minConfidence: number,
+    minPosterior: number,
     minShare: number
 ): AcceptedAnchor | undefined {
     const named = insertion.ornamentOf;
     if (!named) return undefined;
 
-    if (named.confidence >= minConfidence) {
-        return { scoreId: named.scoreId, confidence: named.confidence, corroborated: false };
-    }
+    const answer = {
+        scoreId: named.scoreId,
+        gate: named.gate,
+        share: named.share,
+        posterior: named.gate * named.share,
+    };
+
+    if (answer.posterior >= minPosterior) return { ...answer, corroborated: false };
     if (named.share >= minShare && (signs.get(named.scoreId)?.length ?? 0) > 0) {
-        return { scoreId: named.scoreId, confidence: named.confidence, corroborated: true };
+        return { ...answer, corroborated: true };
     }
     return undefined;
 }
@@ -339,7 +401,7 @@ export function divergencesOf(
         const answer = acceptAttribution(
             insertion,
             input.signs,
-            settings.attributionConfidence,
+            settings.attributionPosterior,
             settings.attributionShare
         );
         if (answer) accepted.set(insertion.performanceId, answer);
@@ -719,20 +781,21 @@ function anchorOf(
 ): {
     anchor: Anchor | undefined;
     from: "model" | "timing" | null;
-    confidence?: number;
+    gate?: number;
+    posterior?: number;
     corroborated?: boolean;
 } {
     const named = ctx.accepted.get(group.entries[0].span.id);
     if (named) {
+        const said = {
+            from: "model",
+            gate: named.gate,
+            posterior: named.posterior,
+            corroborated: named.corroborated,
+        } as const;
+
         const matched = ctx.anchorByScoreId.get(named.scoreId);
-        if (matched) {
-            return {
-                anchor: matched,
-                from: "model",
-                confidence: named.confidence,
-                corroborated: named.corroborated,
-            };
-        }
+        if (matched) return { anchor: matched, ...said };
 
         const note = ctx.scoreById.get(named.scoreId);
         if (note) {
@@ -743,9 +806,7 @@ function anchorOf(
                     onsetMs: Number.NaN,
                     pitch: note.pitch,
                 },
-                from: "model",
-                confidence: named.confidence,
-                corroborated: named.corroborated,
+                ...said,
             };
         }
     }
@@ -761,7 +822,7 @@ function readPlayed(
 ): AddedDivergence {
     const spans = group.entries.map((entry) => entry.span);
     const onsetMs = spans[0].onsetMs;
-    const { anchor, from, confidence, corroborated } = anchorOf(group, ctx);
+    const { anchor, from, gate, posterior, corroborated } = anchorOf(group, ctx);
     const signs = anchor ? input.signs.get(anchor.scoreId) ?? [] : [];
 
     const { reading, because } = readAdded(
@@ -769,7 +830,9 @@ function readPlayed(
         anchor,
         signs,
         ctx,
-        from === "model" ? { confidence: confidence ?? 0, corroborated: !!corroborated } : undefined
+        from === "model"
+            ? { gate: gate ?? 0, posterior: posterior ?? 0, corroborated: !!corroborated }
+            : undefined
     );
 
     return {
@@ -779,8 +842,8 @@ function readPlayed(
         pitches: spans.map((span) => span.pitch),
         anchorId: anchor?.scoreId ?? null,
         anchorFrom: anchor ? from : null,
-        ...(from === "model" && confidence !== undefined
-            ? { anchorConfidence: confidence, anchorCorroborated: !!corroborated }
+        ...(from === "model" && posterior !== undefined
+            ? { anchorConfidence: posterior, anchorCorroborated: !!corroborated }
             : {}),
         signs,
         reading,
@@ -821,7 +884,7 @@ function readAdded(
     anchor: Anchor | undefined,
     signs: OrnamentSign[],
     ctx: AddedContext,
-    attributed?: { confidence: number; corroborated: boolean }
+    attributed?: { gate: number; posterior: number; corroborated: boolean }
 ): { reading: AddedReading; because: string } {
     const onsetMs = spans[0].onsetMs;
 
@@ -846,12 +909,12 @@ function readAdded(
                       ? ` The model puts ${
                             spans.length === 1 ? "this note" : `all ${spans.length} notes`
                         } on that written note too - it ranks it clearly ahead of every other, ` +
-                        `though it is only ${Math.round(attributed.confidence * 100)}% sure they ` +
+                        `though it is only ${Math.round(attributed.gate * 100)}% sure they ` +
                         `are ornaments at all. The sign is what settles that.`
                       : ` The model puts ${
                             spans.length === 1 ? "this note" : `all ${spans.length} notes`
                         } on that written note as well, ${Math.round(
-                            attributed.confidence * 100
+                            attributed.posterior * 100
                         )}% sure.`),
         };
     }
@@ -865,7 +928,7 @@ function readAdded(
             because:
                 `The model reads ${
                     spans.length === 1 ? "this note" : `these ${spans.length} notes`
-                } as ornamenting a written note, ${Math.round(attributed.confidence * 100)}% ` +
+                } as ornamenting a written note, ${Math.round(attributed.posterior * 100)}% ` +
                 `sure, and the score writes no ornament there. It has only ever been taught ` +
                 `this on rendered performances, so it is worth looking at.`,
         };
