@@ -9,8 +9,8 @@ The customization is [`odd/as-played-by.odd`](odd/as-played-by.odd). The RelaxNG
 Schematron rules compiled from it sit beside it and are committed, so nothing that reads or writes
 the format needs a schema toolchain.
 
-There is a [page showing what it is for](https://align.encoded-ghosts.org/): the same music drawn
-twice, once by notated duration and once by the times a performance took.
+There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): the same
+music drawn twice, once by notated duration and once by the times a performance took.
 
 ## Why write it down
 
