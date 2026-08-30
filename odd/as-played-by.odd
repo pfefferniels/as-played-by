@@ -35,18 +35,16 @@
           realised, when it was struck, how loud, and where the two disagreed. The record lives in
           <gi>performance</gi>, and nothing outside it is constrained.</p>
 
-        <p>The customization exists because two independent readers have to agree on such a file:
-          the <ref target="https://github.com/pfefferniels/mpm-desk">MPM Desk</ref>, which reads the
-          alignment back in order to fit performance instructions to it, and the <ref
+        <p>Two applications currently make use of this customization,
+          <ref target="https://github.com/pfefferniels/mpm-desk">MPM Desk</ref>,
+          and the <ref
             target="https://github.com/pfefferniels/verovio">verovio fork</ref> on branch
           <code>aligned-mei</code>, which lays a score out along performed time rather than notated
-          duration. Where they read the same attribute differently, the narrower reading is the one
-          written down here.</p>
+          duration.</p>
 
-        <p>Almost everything the format uses is already legal MEI. <gi>when</gi> takes
-          <gi>extData</gi> children in plain MEI 5.1, and <att>type</att> and <att>corresp</att>
-          reach it through <ident type="class">att.common</ident>. One attribute has to be added,
-          and the rest of this customization only narrows what MEI already allows.</p>
+        <p>Performance data is encoded through the <gi>when</gi> element. It takes
+          <gi>extData</gi> children in plain MEI 5.1, and <att>type</att> reaches it through
+          <ident type="class">att.common</ident>.</p>
       </div>
 
       <div>
@@ -61,7 +59,7 @@
 
         <p>Whether this is the right way round is an open question. Asking the MEI community to put
           <gi>recording</gi> into <ident type="class">att.source</ident> would remove the need for a
-          customization at this point altogether.</p>
+          customization at this point altogether [link to paper here].</p>
       </div>
 
       <div>
@@ -76,21 +74,10 @@
           only a moment.</p>
 
         <p><att>absolute</att> is restricted to whole milliseconds written with the
-          <code>ms</code> unit. MEI itself is more permissive, and so is the verovio fork, which
-          also reads <code>s</code> and <code>min</code>. The MPM Desk reads the attribute with
-          <code>parseInt</code> and would take <code>12.5s</code> for twelve milliseconds. Until
-          both readers agree, only the form they read alike is allowed here. The same holds for
+          <code>ms</code> unit. The same holds for
           <gi>extData</gi> of type <code>duration</code>.</p>
 
-        <p>The <att>type</att> of an <gi>extData</gi> is drawn from a closed list. The list is the
-          substance of the format: it is what a reader may expect to find and what a writer may
-          emit, and until now it existed only as agreement between two source files.</p>
-
-        <p><att>corresp</att> on a <gi>when</gi> names the event in the source recording that was
-          heard, in whatever identifiers that recording uses. It is deliberately left unconstrained
-          and deliberately not a reference into the MEI document, which is why it carries no
-          leading <code>#</code>. It is optional, and a reader that cannot resolve it loses only
-          the way back to the audio or MIDI it came from.</p>
+        <p>The <att>type</att> of an <gi>extData</gi> is drawn from a closed list.</p>
 
         <p>Constraining <att>type</att> on <gi>when</gi> also constrains the <gi>when</gi> elements
           inside a <gi>clip</gi>, which this format does not otherwise use. A document that needs
@@ -99,11 +86,6 @@
 
       <div>
         <head>Known pitfalls</head>
-
-        <p>An <att>xml:id</att> is an NCName and may not begin with a digit. A bare UUID therefore
-          fails validation roughly half the time, which is easy to miss when the identifiers are
-          generated. Prefixing them is enough.</p>
-
         <p><gi>performance</gi> is a member of <ident type="class">model.resourceLike</ident>, which
           <gi>music</gi> admits only before <gi>front</gi> and <gi>body</gi>. Appending it to
           <gi>music</gi> puts it after <gi>body</gi>, where MEI does not allow it.</p>

@@ -9,8 +9,9 @@ The customization is [`odd/as-played-by.odd`](odd/as-played-by.odd). The RelaxNG
 Schematron rules compiled from it sit beside it and are committed, so nothing that reads or writes
 the format needs a schema toolchain.
 
-There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): the same
-music drawn twice, once by notated duration and once by the times a performance took.
+There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): two bars
+drawn twice, once by notated duration and once by the times a performance took, with the markup
+that says so beside them.
 
 ## Why write it down
 
@@ -38,20 +39,18 @@ A `<when>` in a `<recording>` takes one of five shapes, told apart by `@type` an
 | `sustain`, `soft` | no | yes | a pedal press |
 
 `@data` points at the written note. `@absolute` is the moment it sounded, in whole milliseconds,
-with `@abstype="smil"`. `@corresp` names the event in the source recording, in whatever identifiers
-that recording uses; it is optional and deliberately not a reference into the MEI document.
+with `@abstype="smil"`.
 
 Everything else a record carries is an `<extData>` child, whose `@type` is drawn from a closed
 list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `confidence`,
 `reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
 `ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. The ODD says what each
-one holds. [`examples/shapes.mei`](examples/shapes.mei) shows all five shapes in eight bars' worth
-of alignment.
+one holds. [`examples/shapes.mei`](examples/shapes.mei) shows all five shapes in two bars.
 
 ## What it changes about MEI
 
 Almost nothing needs adding. `<when>` already takes `<extData>` children in MEI 5.1, and `@type`
-and `@corresp` reach it through `att.common`. One attribute is genuinely missing: `<recording>` is
+reaches it through `att.common`. One attribute is genuinely missing: `<recording>` is
 not a member of `att.source`, so it cannot name the take it records, which is how a document
 holding several takes says which one a `<when>` belongs to and how verovio's `performanceRecording`
 selects one. The customization adds that membership. Whether this is the right way round is an open
@@ -82,20 +81,13 @@ with no `@absolute` and is reported as "Skipping `<when>` without an @absolute a
 XML comment inside a `<recording>` is reported as an unsupported element. Neither changes what is
 drawn, and both should be fixed in the fork rather than worked around here.
 
-[`demo/transcription.mei`](demo/transcription.mei) is a real two-take alignment of piano rolls,
-made in the MPM Desk before this customization existed and migrated to it. It satisfies every rule
-stated here and is still rejected by MEI's own rules, because two hairpins in the imported score
-have no end. That is a defect in the score rather than in the alignment, so the file is kept out of
-the conformance corpus rather than silently repaired.
-
 ## Layout
 
 | | |
 |---|---|
 | `odd/` | the customization, and the RelaxNG and Schematron compiled from it |
-| `examples/` | one file per shape, and a counter-example per rule under `invalid/` |
-| `demo/` | the file the page renders |
-| `index.html` | the page |
+| `examples/` | all five shapes in two bars, and a counter-example per rule under `invalid/` |
+| `index.html` | the page, which renders `examples/shapes.mei` |
 | `vendor/verovio/` | a committed WebAssembly build of the fork, so the page needs no build step |
 | `tools/` | the three scripts below |
 

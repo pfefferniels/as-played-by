@@ -11,7 +11,7 @@
       --muted: #6b7280;
       --line: #e5e7eb;
       --wash: #f9fafb;
-      --hover: #f3f4f6;
+      --mark: #2563eb;
     }
 
     * {
@@ -22,98 +22,61 @@
       margin: 0;
       background: #ffffff;
       color: var(--ink);
-      font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+      font: 15px/1.65 Arial, Helvetica, sans-serif;
     }
 
     main {
-      max-width: 1100px;
+      max-width: 940px;
       margin: 0 auto;
       padding: 48px 24px 96px;
     }
 
     h1 {
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      margin: 0 0 8px;
+      font-size: 26px;
+      font-weight: 700;
+      margin: 0 0 10px;
     }
 
     h2 {
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 12px;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       color: var(--muted);
-      margin: 0 0 12px;
+      margin: 0 0 10px;
+    }
+
+    p {
+      max-width: 66ch;
     }
 
     .lede {
       color: var(--muted);
-      max-width: 62ch;
-      margin: 0 0 12px;
+      margin: 0 0 16px;
     }
 
-    a {
-      color: inherit;
-      text-underline-offset: 2px;
-    }
-
-    .controls {
+    nav {
       display: flex;
       flex-wrap: wrap;
-      gap: 20px;
-      align-items: flex-end;
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--wash);
-      margin: 28px 0;
+      gap: 8px;
+      margin: 0 0 40px;
     }
 
-    label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-
-    select,
-    input[type="range"] {
-      font: inherit;
-      font-size: 14px;
-      accent-color: var(--ink);
-    }
-
-    select {
-      padding: 5px 8px;
+    nav a {
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #ffffff;
+      padding: 5px 11px;
+      font-size: 13px;
       color: inherit;
+      text-decoration: none;
     }
 
-    select:hover {
-      background: var(--hover);
-    }
-
-    .check {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      font-size: 14px;
-      color: var(--ink);
-    }
-
-    .check label {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 400;
-      color: inherit;
+    nav a:hover {
+      background: var(--wash);
     }
 
     section {
-      margin-top: 40px;
+      margin-top: 36px;
     }
 
     .panel {
@@ -127,25 +90,58 @@
       display: block;
     }
 
-    .note {
+    pre {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--wash);
+      padding: 14px 16px;
+      max-height: 30em;
+      overflow: auto;
+      font: 12.5px/1.6 ui-monospace, Menlo, Consolas, monospace;
+      tab-size: 3;
+    }
+
+    .when {
+      display: block;
+      border-radius: 3px;
+    }
+
+    .when:hover {
+      background: #dbeafe;
+      cursor: default;
+    }
+
+    .lit,
+    .lit * {
+      fill: var(--mark);
+      color: var(--mark);
+      opacity: 1;
+    }
+
+    .caption {
       color: var(--muted);
       font-size: 13px;
-      max-width: 68ch;
       margin: 10px 0 0;
     }
 
     .status {
       color: var(--muted);
       font-size: 13px;
-      padding: 24px 8px;
+      padding: 20px 8px;
     }
 
     footer {
-      margin-top: 64px;
-      padding-top: 20px;
+      margin-top: 56px;
+      padding-top: 18px;
       border-top: 1px solid var(--line);
       color: var(--muted);
       font-size: 13px;
+    }
+
+    footer a,
+    .caption a {
+      color: inherit;
     }
   </style>
 </head>
@@ -158,37 +154,19 @@
       event realised, when it was struck, how loud, and where the two disagreed. The record lives in
       <code>&lt;performance&gt;</code> and travels with the score.
     </p>
-    <p class="lede">
-      Below, the same music is drawn twice. The upper score is laid out by notated duration, the way
-      any renderer draws it. The lower one is laid out by the times a performance actually took, read
-      out of a <code>&lt;recording&gt;</code> in the same file.
-    </p>
 
-    <div class="controls">
-      <div>
-        <label for="file">Example</label>
-        <select id="file">
-          <option value="demo/transcription.mei">Two piano rolls, aligned</option>
-          <option value="examples/shapes.mei">The five shapes a when can take</option>
-        </select>
-      </div>
-      <div>
-        <label for="take">Take</label>
-        <select id="take"></select>
-      </div>
-      <div>
-        <label for="scale">Seconds to the inch</label>
-        <input id="scale" type="range" min="4" max="40" step="1" value="16" />
-      </div>
-      <div class="check">
-        <input id="velocity" type="checkbox" checked />
-        <label for="velocity">Ink density is velocity</label>
-      </div>
-      <div class="check">
-        <input id="ruler" type="checkbox" checked />
-        <label for="ruler">Show the clock</label>
-      </div>
-    </div>
+    <nav>
+      <a href="odd/as-played-by.odd">The ODD</a>
+      <a href="odd/as-played-by.rng">RelaxNG</a>
+      <a href="odd/as-played-by.sch">Schematron</a>
+      <a href="examples/shapes.mei">This example</a>
+      <a href="https://github.com/pfefferniels/as-played-by">Repository</a>
+    </nav>
+
+    <p>
+      Two bars, carrying one invented take that contains every shape the format defines. Hovering a
+      <code>&lt;when&gt;</code> below lights up the note it speaks about.
+    </p>
 
     <section>
       <h2>As written</h2>
@@ -199,13 +177,20 @@
 
     <section>
       <h2>As played</h2>
-      <div class="panel" id="played">
-        <p class="status"></p>
-      </div>
-      <p class="note">
-        Noteheads stand where they were struck rather than where the metre puts them, so the
-        barlines are drawn dashed: they no longer sit at a fixed distance. A note the recording
-        never reached is bracketed.
+      <div class="panel" id="played"></div>
+      <p class="caption">
+        Noteheads stand where they were struck rather than where the metre puts them, so the barline
+        is drawn dashed. Ink density is velocity. The third note is dark red because the recording
+        never played it.
+      </p>
+    </section>
+
+    <section>
+      <h2>The markup</h2>
+      <pre id="markup"></pre>
+      <p class="caption">
+        The whole of <a href="examples/shapes.mei">examples/shapes.mei</a>. Everything the
+        customization is about sits in the <code>&lt;performance&gt;</code> element.
       </p>
     </section>
 
@@ -221,18 +206,13 @@
     import createVerovioModule from './vendor/verovio/dist/verovio-module.mjs';
     import { VerovioToolkit } from './vendor/verovio/dist/verovio.mjs';
 
-    const MEI_NS = 'http://www.music-encoding.org/ns/mei';
+    const EXAMPLE = 'examples/shapes.mei';
+    const TAKE = '#take-1';
 
-    const controls = {
-      file: document.getElementById('file'),
-      take: document.getElementById('take'),
-      scale: document.getElementById('scale'),
-      velocity: document.getElementById('velocity'),
-      ruler: document.getElementById('ruler'),
-    };
     const panels = {
       written: document.getElementById('written'),
       played: document.getElementById('played'),
+      markup: document.getElementById('markup'),
     };
 
     const shared = {
@@ -240,66 +220,65 @@
       adjustPageWidth: true,
       header: 'none',
       footer: 'none',
-      scale: 55,
+      scale: 60,
       svgHtml5: true,
     };
 
-    /** Every page of the currently loaded document, drawn one below the other. */
-    const renderInto = (panel, toolkit, mei, options) => {
+    const draw = (panel, toolkit, mei, options) => {
       toolkit.setOptions({ ...shared, ...options });
       toolkit.loadData(mei);
-      const pages = Array.from({ length: toolkit.getPageCount() }, (_, i) => toolkit.renderToSVG(i + 1));
-      panel.innerHTML = pages.join('');
+      panel.innerHTML = toolkit.renderToSVG(1);
     };
 
-    /** The takes a document offers, in the order a reader meets them. */
-    const takesIn = (mei) => {
-      const doc = new DOMParser().parseFromString(mei, 'application/xml');
-      return Array.from(doc.getElementsByTagNameNS(MEI_NS, 'recording')).map((recording, index) => ({
-        value: recording.getAttribute('source') ?? String(index + 1),
-        label: `Take ${index + 1}`,
-      }));
+    const escaped = (text) =>
+      text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    /**
+     * The document as text, with every <when> wrapped so it can be hovered. The note it
+     * speaks about is its @data, or its ornament anchor where it points at no written note.
+     */
+    const markupOf = (mei) => {
+      const when = /<when\b[\s\S]*?(?:\/>|<\/when>)/g;
+      const pieces = [];
+      let read = 0;
+      for (const match of mei.matchAll(when)) {
+        pieces.push(escaped(mei.slice(read, match.index)));
+        const target = match[0].match(/(?:\bdata="#|ornamentAnchor">#)([^"<]+)/);
+        pieces.push(
+          `<span class="when"${target ? ` data-target="${target[1]}"` : ''}>${escaped(match[0])}</span>`
+        );
+        read = match.index + match[0].length;
+      }
+      pieces.push(escaped(mei.slice(read)));
+      return pieces.join('');
     };
 
-    const fillTakes = (takes) => {
-      controls.take.innerHTML = '';
-      takes.forEach(({ value, label }) => controls.take.add(new Option(label, value)));
-      controls.take.disabled = takes.length < 2;
+    const notesFor = (id) =>
+      document.querySelectorAll(`#written [data-id="${id}"], #played [data-id="${id}"]`);
+
+    const light = (event, on) => {
+      const id = event.target.closest('.when')?.dataset.target;
+      if (id) notesFor(id).forEach((note) => note.classList.toggle('lit', on));
     };
 
     const module = await createVerovioModule();
-    const written = new VerovioToolkit(module);
-    const played = new VerovioToolkit(module);
+    const mei = await fetch(EXAMPLE).then((response) => response.text());
 
-    let mei = '';
+    draw(panels.written, new VerovioToolkit(module), mei, { breaks: 'none' });
+    draw(panels.played, new VerovioToolkit(module), mei, {
+      performanceAlignment: true,
+      performanceRecording: TAKE,
+      performanceScale: 24,
+      performanceVelocityOpacity: true,
+      performanceRuler: true,
+      performanceUnmatched: 'mark',
+      pageMarginBottom: 150,
+      pageMarginRight: 60,
+    });
 
-    const drawPerformance = () => {
-      renderInto(panels.played, played, mei, {
-        performanceAlignment: true,
-        performanceRecording: controls.take.value,
-        performanceScale: Number(controls.scale.value),
-        performanceVelocityOpacity: controls.velocity.checked,
-        performanceRuler: controls.ruler.checked,
-        performanceUnmatched: 'mark',
-        pageMarginBottom: controls.ruler.checked ? 150 : 50,
-        pageMarginRight: 100,
-      });
-    };
-
-    const load = async () => {
-      panels.played.innerHTML = '<p class="status">Rendering…</p>';
-      mei = await fetch(controls.file.value).then((response) => response.text());
-      fillTakes(takesIn(mei));
-      renderInto(panels.written, written, mei, { breaks: 'auto', pageWidth: 2100 });
-      drawPerformance();
-    };
-
-    controls.file.addEventListener('change', load);
-    ['take', 'scale', 'velocity', 'ruler'].forEach((name) =>
-      controls[name].addEventListener('input', drawPerformance)
-    );
-
-    await load();
+    panels.markup.innerHTML = markupOf(mei);
+    panels.markup.addEventListener('mouseover', (event) => light(event, true));
+    panels.markup.addEventListener('mouseout', (event) => light(event, false));
   </script>
 </body>
 
