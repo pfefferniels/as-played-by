@@ -1,31 +1,15 @@
 # As played by
 
-An MEI customization. It defines how an MEI document carries, beside the score, a record of one or
+An MEI customization. Defines how an MEI document carries, beside the score, a record of one or
 more performances of it: which written note a sounded event realised, when it was struck, how long
-and how loud. The record lives in `<performance>` and travels with the score, so an alignment does
-not need a second file or a second format.
+and how loud.
 
-The customization is [`odd/as-played-by.odd`](odd/as-played-by.odd). The RelaxNG grammar and the
-Schematron rules compiled from it sit beside it and are committed, so nothing that reads or writes
-the format needs a schema toolchain.
+The customization is [`odd/as-played-by.odd`](odd/as-played-by.odd), along with a RelaxNG grammar
+and the Schematron rules compiled from it.
 
-There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): the opening
-of Schumann's *Träumerei* read from a Welte piano roll, with the document on one side and the score
-laid out along the time the roll took on the other.
+For an example encoding see [here](https://pfefferniels.github.io/as-played-by/).
 
-## Why write it down
-
-Two independent readers have to agree on such a file. The
-[MPM Desk](https://github.com/pfefferniels/mpm-desk) reads an alignment back in order to fit
-performance instructions to it, and the [verovio fork](https://github.com/pfefferniels/verovio) on
-branch `aligned-mei` lays a score out along performed time. Until now the agreement between them
-existed only as two source files that happened to match. Where they read the same attribute
-differently, this customization writes down the narrower reading.
-
-The repository held the alignment desk that produced these files. That work has moved into the MPM
-Desk, and what is left here is the format.
-
-## The five shapes
+## Encoding
 
 A `<when>` in a `<recording>` takes one of five shapes, told apart by `@type` and by which of
 `@data` and `@absolute` are present.
@@ -38,50 +22,14 @@ A `<when>` in a `<recording>` takes one of five shapes, told apart by `@type` an
 | `substitution` | yes | yes | a written note that sounded at another pitch |
 | `sustain`, `soft` | no | yes | a pedal press |
 
-`@data` points at the written note. `@absolute` is the moment it sounded, in whole milliseconds,
-with `@abstype="smil"`.
+`@data` points at the `xml:id` of a written note. `@absolute` is the moment it sounded, in whole
+milliseconds, with `@abstype="smil"`.
 
 Everything else a record carries is an `<extData>` child, whose `@type` is drawn from a closed
 list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `confidence`,
 `reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
-`ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. The ODD says what each
-one holds. [`examples/shapes.mei`](examples/shapes.mei) shows all five shapes in two invented bars,
-and [`examples/traeumerei.mei`](examples/traeumerei.mei) is a real one: the upbeat and first bar of
-Schumann's *Träumerei*, cut from a Welte roll transcription made in the MPM Desk.
-
-## What it changes about MEI
-
-Almost nothing needs adding. `<when>` already takes `<extData>` children in MEI 5.1, and `@type`
-reaches it through `att.common`. One attribute is genuinely missing: `<recording>` is
-not a member of `att.source`, so it cannot name the take it records, which is how a document
-holding several takes says which one a `<when>` belongs to and how verovio's `performanceRecording`
-selects one. The customization adds that membership. Whether this is the right way round is an open
-question, and asking the MEI community to put `<recording>` into `att.source` would remove the need
-for a customization at this point altogether.
-
-The rest only narrows what MEI already allows. The sharpest narrowing is `@absolute`: MEI permits
-several time formats and the verovio fork reads `ms`, `s` and `min`, but the MPM Desk reads the
-attribute with `parseInt` and would take `12.5s` for twelve milliseconds. Only the form both read
-alike is allowed here.
-
-## Two things that are easy to get wrong
-
-An `xml:id` is an NCName and may not begin with a digit, so a bare UUID fails roughly half the
-time. Prefixing generated identifiers is enough.
-
-`<performance>` is a member of `model.resourceLike`, which `<music>` admits only *before* `<front>`
-and `<body>`. Appending it to `<music>`, which is the obvious way to write it, puts it where MEI
-does not allow it.
-
-Both are in [`examples/invalid/`](examples/invalid), together with a counter-example for every rule
-the customization states.
-
-## Rough edges
-
-The verovio fork warns on markup this format considers correct. A deletion reaches it as a `<when>`
-with no `@absolute` and is reported as "Skipping `<when>` without an @absolute attribute", and an
-XML comment inside a `<recording>` is reported as an unsupported element. Neither changes what is
-drawn, and both should be fixed in the fork rather than worked around here.
+`ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. For further reference see
+the [ODD](odd/as-played-by.odd).
 
 ## Layout
 
@@ -91,13 +39,12 @@ drawn, and both should be fixed in the fork rather than worked around here.
 | `examples/` | an invented file covering all five shapes, a real one, and a counter-example per rule under `invalid/` |
 | `index.html` | the page, which renders `examples/traeumerei.mei` |
 | `vendor/verovio/` | a committed WebAssembly build of the fork, so the page needs no build step |
-| `tools/` | the three scripts below |
+| `tools/` | building the schemas, checking the examples, rebuilding the vendored verovio |
 
 ## Checking a document
 
 `tools/validate.sh` runs the grammar and the rules over `examples/`, and asserts that everything
-under `examples/invalid/` is rejected. The second half is the point, since a schema that accepts
-everything would pass the first.
+under `examples/invalid/` is rejected.
 
 ```
    tools/validate.sh
@@ -107,8 +54,7 @@ To check a document of your own, validate it against `odd/as-played-by.rng` and
 `odd/as-played-by.sch`. Most XML editors do this from the two `<?xml-model?>` instructions that
 `examples/shapes.mei` carries.
 
-After changing the ODD, recompile it. The script fetches MEI 5.1 and the TEI stylesheets into an
-ignored `.build/`, so the first run takes a while.
+After changing the ODD, recompile it.
 
 ```
    tools/build-schema.sh
@@ -116,11 +62,12 @@ ignored `.build/`, so the first run takes a while.
 
 Both need `curl`, `unzip`, `xmllint` and `saxon` (`brew install saxon`).
 
-`tools/build-verovio.sh` rebuilds the vendored toolkit, which is only needed after the fork
-changes. It wants the fork checked out and the Emscripten SDK; see the script for the paths.
+## Disclosure
+
+The schema, the examples, the page and the scripts were written by agentic AI (Claude Code).
 
 ## Licence
 
 The ODD and the examples are published under the same terms as MEI itself. The vendored verovio
-build under `vendor/verovio` keeps its own: it comes from
+build under `vendor/verovio` comes from
 [rism-digital/verovio](https://github.com/rism-digital/verovio) under LGPL-3.0-or-later.
