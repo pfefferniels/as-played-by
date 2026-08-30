@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-model href="../odd/as-played-by.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<?xml-model href="../odd/as-played-by.sch" type="application/xml" schematypens="http://purl.oclc.org/dsdl/schematron"?>
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
+   <meiHead>
+      <fileDesc>
+         <titleStmt>
+            <title>Träumerei</title>
+            <composer>Robert Schumann</composer>
+         </titleStmt>
+         <pubStmt>
+            <date isodate="2025-08-09T19:42:32"/>
+         </pubStmt>
+      </fileDesc>
+      <manifestationList>
+         <manifestation xml:id="c9050e75-97a8-4862-9533-0f4b1439802b">
+            <physDesc>
+               <captureMode>
+                  <p>linked-rolls (based on midi2exp)Parameters:<list>
+                     <li>place-time-conversion: kinematic (acceleration: 0.1772 ft/s², speed: 9.85 ft/min)</li>
+                     <li>welte_p=35</li>
+                     <li>welte_f=90</li>
+                     <li>welte_mf=60</li>
+                     <li>welte_loud=75</li>
+                     <li>trackerBarDiameter=1.413</li>
+                     <li>punchExtensionFraction=0.75</li>
+                     <li>slow_decay_rate=2380</li>
+                     <li>fastC_decay_rate=300</li>
+                     <li>fastD_decay_rate=400</li>
+                     <li>division=54</li>
+                     <li>slow_step=0.01050420168067227</li>
+                     <li>fastC_step=0.08333333333333333</li>
+                     <li>fastD_step=-0.1375</li>
+                  </list>
+               </p>
+            </captureMode>
+         </physDesc>
+      </manifestation>
+      <manifestation xml:id="take-0e5f443d-0dd9-4810-9dbe-7f5007df490f">
+         <physDesc>
+            <captureMode>
+               <p>linked-rolls (based on midi2exp)Parameters:<list>
+                  <li>place-time-conversion: kinematic (acceleration: 0.1772 ft/s², speed: 9.85 ft/min)</li>
+                  <li>welte_p=35</li>
+                  <li>welte_f=90</li>
+                  <li>welte_mf=60</li>
+                  <li>welte_loud=75</li>
+                  <li>trackerBarDiameter=1.413</li>
+                  <li>punchExtensionFraction=0.75</li>
+                  <li>slow_decay_rate=2380</li>
+                  <li>fastC_decay_rate=300</li>
+                  <li>fastD_decay_rate=400</li>
+                  <li>division=54</li>
+                  <li>slow_step=0.01050420168067227</li>
+                  <li>fastC_step=0.08333333333333333</li>
+                  <li>fastD_step=-0.1375</li>
+               </list>
+            </p>
+         </captureMode>
+      </physDesc>
+   </manifestation>
+</manifestationList>
+</meiHead>
+<music>
+<performance>
+   <recording source="#c9050e75-97a8-4862-9533-0f4b1439802b">
+      <when absolute="28618ms" abstype="smil" corresp="symbol_acfc087a-e169-4fac-be23-b2d2ea72cefa" data="#npk4lw6" type="match">
+         <extData type="velocity">41</extData>
+         <extData type="duration">979ms</extData>
+         <extData type="onsetTicks">28618</extData>
+         <extData type="durationTicks">979</extData>
+      </when>
+      <when absolute="29582ms" abstype="smil" corresp="symbol_ec92cca1-095b-4aa0-92c0-e509a62a6b6c" data="#nxbdd6x" type="match">
+         <extData type="velocity">40</extData>
+         <extData type="duration">2732ms</extData>
+         <extData type="onsetTicks">29582</extData>
+         <extData type="durationTicks">2732</extData>
+      </when>
+      <when absolute="29353ms" abstype="smil" corresp="symbol_03e5691c-d0b8-4916-b54e-817200185466" data="#n4vqmkc" type="match">
+         <extData type="velocity">37</extData>
+         <extData type="duration">5052ms</extData>
+         <extData type="onsetTicks">29353</extData>
+         <extData type="durationTicks">5052</extData>
+      </when>
+      <when absolute="30488ms" abstype="smil" corresp="symbol_37541578-f09c-4308-91e2-ddd6c7f0379c" data="#n1obi0t8" type="match">
+         <extData type="velocity">35</extData>
+         <extData type="duration">683ms</extData>
+         <extData type="onsetTicks">30488</extData>
+         <extData type="durationTicks">683</extData>
+      </when>
+      <when absolute="30515ms" abstype="smil" corresp="symbol_a41e85a4-a1c4-4c06-95f9-34c54ec0023d" data="#nd80ywu" type="match">
+         <extData type="velocity">35</extData>
+         <extData type="duration">767ms</extData>
+         <extData type="onsetTicks">30515</extData>
+         <extData type="durationTicks">767</extData>
+      </when>
+      <when absolute="30353ms" abstype="smil" corresp="symbol_d2502412-575b-4e17-8a5b-ce4f5ed43eaf" data="#n1ubfgy0" type="match">
+         <extData type="velocity">35</extData>
+         <extData type="duration">4046ms</extData>
+         <extData type="onsetTicks">30353</extData>
+         <extData type="durationTicks">4046</extData>
+      </when>
+      <when absolute="30500ms" abstype="smil" corresp="symbol_17a5d5de-129c-4e86-97b0-0ab6fd644bb7" data="#n1yas34a" type="match">
+         <extData type="velocity">35</extData>
+         <extData type="duration">3899ms</extData>
+         <extData type="onsetTicks">30500</extData>
+         <extData type="durationTicks">3899</extData>
+      </when>
+      <when absolute="32240ms" abstype="smil" corresp="symbol_1aa3b62f-23c7-4947-913e-a7fa04f1486a" data="#nrbga5m" type="match">
+         <extData type="velocity">36</extData>
+         <extData type="duration">506ms</extData>
+         <extData type="onsetTicks">32240</extData>
+         <extData type="durationTicks">506</extData>
+      </when>
+      <when absolute="32659ms" abstype="smil" corresp="symbol_f4c5679f-77c8-4773-ab73-d144e265a6a4" data="#n1ogvejs" type="match">
+         <extData type="velocity">37</extData>
+         <extData type="duration">507ms</extData>
+         <extData type="onsetTicks">32659</extData>
+         <extData type="durationTicks">507</extData>
+      </when>
+      <when absolute="33114ms" abstype="smil" corresp="symbol_c5ca5933-d373-499c-9fc7-30c9d8d38d9a" data="#n1qzl4hr" type="match">
+         <extData type="velocity">39</extData>
+         <extData type="duration">520ms</extData>
+         <extData type="onsetTicks">33114</extData>
+         <extData type="durationTicks">520</extData>
+      </when>
+      <when absolute="29674ms" abstype="smil" corresp="symbol_08320782-9e79-44df-9f4f-363cfc087697 symbol_03f2b445-9652-4d43-9e68-ce15f23e1751" type="sustain">
+         <extData type="duration">2742ms</extData>
+         <extData type="onsetTicks">29674</extData>
+         <extData type="durationTicks">2742</extData>
+      </when>
+      </recording>
+   </performance>
+<body>
+   <mdiv xml:id="r1241ama">
+      <score xml:id="sxx3od5">
+         <scoreDef xml:id="v1dhhier">
+            <pgHead xml:id="w1aj3sob" func="first">
+               <rend xml:id="x194lsq9" halign="center" valign="top">
+                  <rend xml:id="y1hxnx34" type="title" fontsize="x-large">Träumerei.</rend>
+               </rend>
+            </pgHead>
+            <staffGrp xml:id="apvju6v">
+               <staffGrp xml:id="bg14lrf" bar.thru="true" symbol="brace">
+                  <staffDef xml:id="d12ikqln" n="1" lines="5" keysig="1f" meter.sym="common">
+                     <clef xml:id="m1vpg8lr" shape="G" line="2"/>
+                  </staffDef>
+                  <staffDef xml:id="n1oshren" n="2" lines="5" keysig="1f" meter.sym="common">
+                     <clef xml:id="wysegse" shape="F" line="4"/>
+                  </staffDef>
+               </staffGrp>
+            </staffGrp>
+         </scoreDef>
+         <section xml:id="x1rpwh0z">
+            <measure xml:id="mjpcx1" metcon="false" n="1">
+               <staff xml:id="m1s1" n="1">
+                  <layer xml:id="m1s1l1" n="1">
+                     <note xml:id="npk4lw6" dur="4" oct="4" pname="c" corresp="symbol_acfc087a-e169-4fac-be23-b2d2ea72cefa"/>
+                  </layer>
+               </staff>
+               <staff xml:id="m1s2" n="2">
+                  <layer xml:id="m1s2l1" n="1">
+                     <rest xml:id="r1vdxzr7" dur="4"/>
+                  </layer>
+               </staff>
+               <tempo xml:id="t1kbraqc" type="mscore-infer-from-text" staff="1" tstamp="1" midi.bpm="50">M. M. <rend xml:id="rminrgc" glyph.auth="smufl"></rend> = 100.</tempo>
+               <dynam xml:id="dti0sj4" label="p" staff="1" startid="#npk4lw6">p</dynam>
+               <slur xml:id="sijfcth" startid="#npk4lw6" endid="#n1bsnpkr"/>
+            </measure>
+            <section xml:id="s1">
+               <measure xml:id="m1788ecg" n="2">
+                  <staff xml:id="m2s1" n="1">
+                     <layer xml:id="m2s1l1" n="1">
+                        <note xml:id="nxbdd6x" dur="2" oct="4" pname="f" corresp="symbol_ec92cca1-095b-4aa0-92c0-e509a62a6b6c"/>
+                        <note xml:id="n1bsnpkr" type="mscore-beam-none" dur="8" oct="4" pname="f"/>
+                        <beam xml:id="k1r3ht6q">
+                           <note xml:id="nrbga5m" dur="8" oct="4" pname="e" corresp="symbol_1aa3b62f-23c7-4947-913e-a7fa04f1486a"/>
+                           <note xml:id="n1ogvejs" dur="8" oct="4" pname="f" corresp="symbol_f4c5679f-77c8-4773-ab73-d144e265a6a4"/>
+                           <note xml:id="n1qzl4hr" dur="8" oct="4" pname="a" corresp="symbol_c5ca5933-d373-499c-9fc7-30c9d8d38d9a"/>
+                        </beam>
+                     </layer>
+                     <layer xml:id="m2s1l2" n="2">
+                        <rest xml:id="r1gwgx49" dur="4"/>
+                        <chord xml:id="c1wiufu1" dots="1" dur="2">
+                           <note xml:id="n1obi0t8" oct="3" pname="f" corresp="symbol_37541578-f09c-4308-91e2-ddd6c7f0379c"/>
+                           <note xml:id="nd80ywu" oct="4" pname="c" corresp="symbol_a41e85a4-a1c4-4c06-95f9-34c54ec0023d"/>
+                        </chord>
+                     </layer>
+                  </staff>
+                  <staff xml:id="m2s2" n="2">
+                     <layer xml:id="m2s2l1" n="1">
+                        <note xml:id="nyoi81f" dur="4" oct="2" pname="f"/>
+                        <chord xml:id="c41wf02" dots="1" dur="2" stem.dir="up">
+                           <note xml:id="n1ubfgy0" oct="3" pname="c" corresp="symbol_d2502412-575b-4e17-8a5b-ce4f5ed43eaf"/>
+                           <note xml:id="n1yas34a" oct="3" pname="a" corresp="symbol_17a5d5de-129c-4e86-97b0-0ab6fd644bb7"/>
+                        </chord>
+                     </layer>
+                     <layer xml:id="m2s2l2" n="2">
+                        <note xml:id="n4vqmkc" dur="1" oct="2" pname="f" corresp="symbol_03e5691c-d0b8-4916-b54e-817200185466"/>
+                     </layer>
+                  </staff>
+                  <tie xml:id="t1j3ha4g" startid="#nxbdd6x" endid="#n1bsnpkr"/>
+                  </measure>
+               </section>
+            <section xml:id="s1-rend2">
+               </section>
+            <section xml:id="s2">
+               </section>
+         </section>
+      </score>
+   </mdiv>
+</body>
+</music>
+</mei>

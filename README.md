@@ -1,17 +1,17 @@
 # As played by
 
-An MEI customization for recording how a score was played. Beside the notation, a document carries
-one or more performances of it: which written note each sounded event realised, when it was struck,
-how loud it was, and where the two disagreed. The record lives in `<performance>` and travels with
-the score, so an alignment does not need a second file or a second format.
+An MEI customization. It defines how an MEI document carries, beside the score, a record of one or
+more performances of it: which written note a sounded event realised, when it was struck, how long
+and how loud. The record lives in `<performance>` and travels with the score, so an alignment does
+not need a second file or a second format.
 
 The customization is [`odd/as-played-by.odd`](odd/as-played-by.odd). The RelaxNG grammar and the
 Schematron rules compiled from it sit beside it and are committed, so nothing that reads or writes
 the format needs a schema toolchain.
 
-There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): two bars
-drawn twice, once by notated duration and once by the times a performance took, with the markup
-that says so beside them.
+There is a [page showing what it is for](https://pfefferniels.github.io/as-played-by/): the opening
+of Schumann's *Träumerei* read from a Welte piano roll, with the document on one side and the score
+laid out along the time the roll took on the other.
 
 ## Why write it down
 
@@ -45,7 +45,9 @@ Everything else a record carries is an `<extData>` child, whose `@type` is drawn
 list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `confidence`,
 `reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
 `ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. The ODD says what each
-one holds. [`examples/shapes.mei`](examples/shapes.mei) shows all five shapes in two bars.
+one holds. [`examples/shapes.mei`](examples/shapes.mei) shows all five shapes in two invented bars,
+and [`examples/traeumerei.mei`](examples/traeumerei.mei) is a real one: the upbeat and first bar of
+Schumann's *Träumerei*, cut from a Welte roll transcription made in the MPM Desk.
 
 ## What it changes about MEI
 
@@ -86,8 +88,8 @@ drawn, and both should be fixed in the fork rather than worked around here.
 | | |
 |---|---|
 | `odd/` | the customization, and the RelaxNG and Schematron compiled from it |
-| `examples/` | all five shapes in two bars, and a counter-example per rule under `invalid/` |
-| `index.html` | the page, which renders `examples/shapes.mei` |
+| `examples/` | an invented file covering all five shapes, a real one, and a counter-example per rule under `invalid/` |
+| `index.html` | the page, which renders `examples/traeumerei.mei` |
 | `vendor/verovio/` | a committed WebAssembly build of the fork, so the page needs no build step |
 | `tools/` | the three scripts below |
 

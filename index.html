@@ -7,11 +7,9 @@
   <title>As played by</title>
   <style>
     :root {
-      --ink: #111827;
-      --muted: #6b7280;
-      --line: #e5e7eb;
-      --wash: #f9fafb;
-      --mark: #2563eb;
+      --line: #d1d5db;
+      --wash: #f6f6f6;
+      --lit: #0645ad;
     }
 
     * {
@@ -21,127 +19,117 @@
     body {
       margin: 0;
       background: #ffffff;
-      color: var(--ink);
-      font: 15px/1.65 Arial, Helvetica, sans-serif;
+      color: #000000;
+      font: 15px/1.6 Arial, Helvetica, sans-serif;
     }
 
     main {
-      max-width: 940px;
+      max-width: 1180px;
       margin: 0 auto;
-      padding: 48px 24px 96px;
+      padding: 44px 24px 88px;
     }
 
     h1 {
-      font-size: 26px;
+      font-size: 24px;
       font-weight: 700;
-      margin: 0 0 10px;
+      margin: 0 0 6px;
     }
 
     h2 {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-      margin: 0 0 10px;
+      margin: 0 0 8px;
     }
 
     p {
-      max-width: 66ch;
+      max-width: 74ch;
+      margin: 0 0 12px;
     }
 
-    .lede {
-      color: var(--muted);
-      margin: 0 0 16px;
+    a {
+      color: inherit;
+      text-underline-offset: 3px;
+    }
+
+    .version {
+      margin: 0 0 18px;
+      font-size: 13px;
     }
 
     nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 0 0 40px;
+      margin: 0 0 34px;
+      font-size: 14px;
     }
 
-    nav a {
+    nav .sep {
+      padding: 0 7px;
+      color: var(--line);
+    }
+
+    .two {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+      margin-top: 28px;
+    }
+
+    @media (max-width: 900px) {
+      .two {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    pre,
+    .panel {
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 5px 11px;
-      font-size: 13px;
-      color: inherit;
-      text-decoration: none;
+      margin: 0;
+      max-height: 34em;
     }
 
-    nav a:hover {
+    pre {
       background: var(--wash);
-    }
-
-    section {
-      margin-top: 36px;
+      padding: 12px 14px;
+      overflow: auto;
+      font: 12px/1.55 ui-monospace, Menlo, Consolas, monospace;
+      tab-size: 3;
     }
 
     .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow-x: auto;
       padding: 8px;
+      overflow: auto;
     }
 
     .panel svg {
       display: block;
     }
 
-    pre {
-      margin: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--wash);
-      padding: 14px 16px;
-      max-height: 30em;
-      overflow: auto;
-      font: 12.5px/1.6 ui-monospace, Menlo, Consolas, monospace;
-      tab-size: 3;
-    }
-
     .when {
       display: block;
-      border-radius: 3px;
     }
 
     .when:hover {
-      background: #dbeafe;
+      background: #ffe9a8;
       cursor: default;
     }
 
     .lit,
     .lit * {
-      fill: var(--mark);
-      color: var(--mark);
+      fill: var(--lit);
+      color: var(--lit);
       opacity: 1;
     }
 
     .caption {
-      color: var(--muted);
       font-size: 13px;
-      margin: 10px 0 0;
-    }
-
-    .status {
-      color: var(--muted);
-      font-size: 13px;
-      padding: 20px 8px;
+      margin: 8px 0 0;
     }
 
     footer {
-      margin-top: 56px;
-      padding-top: 18px;
+      margin-top: 48px;
+      padding-top: 16px;
       border-top: 1px solid var(--line);
-      color: var(--muted);
       font-size: 13px;
-    }
-
-    footer a,
-    .caption a {
-      color: inherit;
     }
   </style>
 </head>
@@ -149,50 +137,44 @@
 <body>
   <main>
     <h1>As played by</h1>
-    <p class="lede">
-      An MEI customization for recording how a score was played: which written note each sounded
-      event realised, when it was struck, how loud, and where the two disagreed. The record lives in
-      <code>&lt;performance&gt;</code> and travels with the score.
+    <p class="version" id="version"></p>
+
+    <p>
+      <em>As played by</em> is an MEI customization. It defines how an MEI document carries, beside
+      the score, a record of one or more performances of it: which written note a sounded event
+      realised, when it was struck, how long and how loud. The record lives in
+      <code>&lt;performance&gt;</code>, and nothing outside it is constrained.
     </p>
 
     <nav>
-      <a href="odd/as-played-by.odd">The ODD</a>
-      <a href="odd/as-played-by.rng">RelaxNG</a>
-      <a href="odd/as-played-by.sch">Schematron</a>
-      <a href="examples/shapes.mei">This example</a>
-      <a href="https://github.com/pfefferniels/as-played-by">Repository</a>
+      <a href="odd/as-played-by.odd">The ODD</a><span class="sep">|</span><a
+        href="odd/as-played-by.rng">RelaxNG</a><span class="sep">|</span><a
+        href="odd/as-played-by.sch">Schematron</a><span class="sep">|</span><a
+        href="examples/traeumerei.mei">This example</a><span class="sep">|</span><a
+        href="https://github.com/pfefferniels/as-played-by">Repository</a>
     </nav>
 
     <p>
-      Two bars, carrying one invented take that contains every shape the format defines. Hovering a
-      <code>&lt;when&gt;</code> below lights up the note it speaks about.
+      The upbeat and first bar of Schumann's <em>Träumerei</em>, read from a Welte piano roll. On
+      the left is the whole of the document, on the right the score laid out along the time the
+      roll took rather than along the notated durations. Hovering a <code>&lt;when&gt;</code>
+      lights up the note it speaks about.
     </p>
 
-    <section>
-      <h2>As written</h2>
-      <div class="panel" id="written">
-        <p class="status">Loading verovio…</p>
+    <div class="two">
+      <div>
+        <h2>The document</h2>
+        <pre id="markup"></pre>
       </div>
-    </section>
-
-    <section>
-      <h2>As played</h2>
-      <div class="panel" id="played"></div>
-      <p class="caption">
-        Noteheads stand where they were struck rather than where the metre puts them, so the barline
-        is drawn dashed. Ink density is velocity. The third note is dark red because the recording
-        never played it.
-      </p>
-    </section>
-
-    <section>
-      <h2>The markup</h2>
-      <pre id="markup"></pre>
-      <p class="caption">
-        The whole of <a href="examples/shapes.mei">examples/shapes.mei</a>. Everything the
-        customization is about sits in the <code>&lt;performance&gt;</code> element.
-      </p>
-    </section>
+      <div>
+        <h2>As played</h2>
+        <div class="panel" id="played"></div>
+        <p class="caption">
+          Noteheads stand where they were struck, so the barline is drawn dashed and the ruler
+          below counts seconds of the recording. Ink density is velocity.
+        </p>
+      </div>
+    </div>
 
     <footer>
       The performed layout is not part of verovio upstream. It comes from the
@@ -206,42 +188,19 @@
     import createVerovioModule from './vendor/verovio/dist/verovio-module.mjs';
     import { VerovioToolkit } from './vendor/verovio/dist/verovio.mjs';
 
-    const EXAMPLE = 'examples/shapes.mei';
-    const TAKE = '#take-1';
+    const EXAMPLE = 'examples/traeumerei.mei';
+    const ODD = 'odd/as-played-by.odd';
 
-    const panels = {
-      written: document.getElementById('written'),
-      played: document.getElementById('played'),
-      markup: document.getElementById('markup'),
-    };
+    const text = (url) => fetch(url).then((response) => response.text());
 
-    const shared = {
-      adjustPageHeight: true,
-      adjustPageWidth: true,
-      header: 'none',
-      footer: 'none',
-      scale: 60,
-      svgHtml5: true,
-    };
+    const escaped = (value) =>
+      value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    const draw = (panel, toolkit, mei, options) => {
-      toolkit.setOptions({ ...shared, ...options });
-      toolkit.loadData(mei);
-      panel.innerHTML = toolkit.renderToSVG(1);
-    };
-
-    const escaped = (text) =>
-      text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    /**
-     * The document as text, with every <when> wrapped so it can be hovered. The note it
-     * speaks about is its @data, or its ornament anchor where it points at no written note.
-     */
+    /** The document as text, with every <when> wrapped so that it can be hovered. */
     const markupOf = (mei) => {
-      const when = /<when\b[\s\S]*?(?:\/>|<\/when>)/g;
       const pieces = [];
       let read = 0;
-      for (const match of mei.matchAll(when)) {
+      for (const match of mei.matchAll(/<when\b[\s\S]*?(?:\/>|<\/when>)/g)) {
         pieces.push(escaped(mei.slice(read, match.index)));
         const target = match[0].match(/(?:\bdata="#|ornamentAnchor">#)([^"<]+)/);
         pieces.push(
@@ -253,32 +212,59 @@
       return pieces.join('');
     };
 
-    const notesFor = (id) =>
-      document.querySelectorAll(`#written [data-id="${id}"], #played [data-id="${id}"]`);
+    /** The edition and the date of the last change, taken from the ODD itself. */
+    const releaseOf = (odd) => {
+      const doc = new DOMParser().parseFromString(odd, 'application/xml');
+      const edition = doc.querySelector('edition')?.textContent.trim();
+      const changes = [...doc.querySelectorAll('change[when]')].map((c) => c.getAttribute('when'));
+      const last = changes.sort().at(-1);
+      const on = last && new Date(last).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      });
+      return [edition, on].filter(Boolean).join(', ');
+    };
 
     const light = (event, on) => {
       const id = event.target.closest('.when')?.dataset.target;
-      if (id) notesFor(id).forEach((note) => note.classList.toggle('lit', on));
+      if (!id) return;
+      document
+        .querySelectorAll(`#played [data-id="${id}"]`)
+        .forEach((note) => note.classList.toggle('lit', on));
     };
 
-    const module = await createVerovioModule();
-    const mei = await fetch(EXAMPLE).then((response) => response.text());
+    const [module, mei, odd] = await Promise.all([
+      createVerovioModule(),
+      text(EXAMPLE),
+      text(ODD),
+    ]);
 
-    draw(panels.written, new VerovioToolkit(module), mei, { breaks: 'none' });
-    draw(panels.played, new VerovioToolkit(module), mei, {
+    const toolkit = new VerovioToolkit(module);
+    toolkit.setOptions({
+      adjustPageHeight: true,
+      adjustPageWidth: true,
+      header: 'none',
+      footer: 'none',
+      scale: 32,
+      svgHtml5: true,
       performanceAlignment: true,
-      performanceRecording: TAKE,
-      performanceScale: 24,
+      performanceScale: 23,
       performanceVelocityOpacity: true,
       performanceRuler: true,
-      performanceUnmatched: 'mark',
+      // 'plain' rather than 'mark': the two notes without a <when> here are a tie continuation
+      // and a note the roll did not capture, and coloring both would read as one finding.
+      performanceUnmatched: 'plain',
       pageMarginBottom: 150,
       pageMarginRight: 60,
     });
+    toolkit.loadData(mei);
+    document.getElementById('played').innerHTML = toolkit.renderToSVG(1);
 
-    panels.markup.innerHTML = markupOf(mei);
-    panels.markup.addEventListener('mouseover', (event) => light(event, true));
-    panels.markup.addEventListener('mouseout', (event) => light(event, false));
+    document.getElementById('version').textContent = releaseOf(odd);
+
+    const markup = document.getElementById('markup');
+    markup.innerHTML = markupOf(mei);
+    markup.addEventListener('mouseover', (event) => light(event, true));
+    markup.addEventListener('mouseout', (event) => light(event, false));
   </script>
 </body>
 

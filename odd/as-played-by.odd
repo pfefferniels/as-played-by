@@ -12,6 +12,9 @@
           <name xml:id="NP">Niels Pfeffer</name>
         </respStmt>
       </titleStmt>
+      <editionStmt>
+        <edition n="0.1">Version 0.1</edition>
+      </editionStmt>
       <publicationStmt>
         <p>Published under the same terms as MEI itself.</p>
       </publicationStmt>
@@ -30,21 +33,18 @@
       <div>
         <head>Scope</head>
 
-        <p>An <soCalled>as played by</soCalled> document is an MEI file that carries, beside the
-          score, a record of one or more performances of it: which written note each sounded event
-          realised, when it was struck, how loud, and where the two disagreed. The record lives in
+        <p><soCalled>As played by</soCalled> is an MEI customization. It defines how an MEI document
+          carries, beside the score, a record of one or more performances of it: which written note
+          a sounded event realised, when it was struck, how long and how loud. The record lives in
           <gi>performance</gi>, and nothing outside it is constrained.</p>
 
-        <p>Two applications currently make use of this customization,
-          <ref target="https://github.com/pfefferniels/mpm-desk">MPM Desk</ref>,
-          and the <ref
-            target="https://github.com/pfefferniels/verovio">verovio fork</ref> on branch
+        <p>Two applications currently make use of this customization, the
+          <ref target="https://github.com/pfefferniels/mpm-desk">MPM Desk</ref> and the
+          <ref target="https://github.com/pfefferniels/verovio">verovio fork</ref> on branch
           <code>aligned-mei</code>, which lays a score out along performed time rather than notated
           duration.</p>
 
-        <p>Performance data is encoded through the <gi>when</gi> element. It takes
-          <gi>extData</gi> children in plain MEI 5.1, and <att>type</att> reaches it through
-          <ident type="class">att.common</ident>.</p>
+        <p>Performance information is encoded in the <gi>when</gi> element.</p>
       </div>
 
       <div>
@@ -73,9 +73,8 @@
           substitution has both and sounds at a pitch the score does not give. A pedal event has
           only a moment.</p>
 
-        <p><att>absolute</att> is restricted to whole milliseconds written with the
-          <code>ms</code> unit. The same holds for
-          <gi>extData</gi> of type <code>duration</code>.</p>
+        <p><att>absolute</att> is restricted to whole milliseconds written with the <code>ms</code>
+          unit. The same holds for <gi>extData</gi> of type <code>duration</code>.</p>
 
         <p>The <att>type</att> of an <gi>extData</gi> is drawn from a closed list.</p>
 
@@ -86,6 +85,7 @@
 
       <div>
         <head>Known pitfalls</head>
+
         <p><gi>performance</gi> is a member of <ident type="class">model.resourceLike</ident>, which
           <gi>music</gi> admits only before <gi>front</gi> and <gi>body</gi>. Appending it to
           <gi>music</gi> puts it after <gi>body</gi>, where MEI does not allow it.</p>
