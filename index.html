@@ -155,32 +155,28 @@
     </nav>
 
     <p>
-      The upbeat and first bar of Schumann's <em>Träumerei</em>, read from a Welte piano roll. On
-      the left is the whole of the document, on the right the score laid out along the time the
-      roll took rather than along the notated durations. Hovering a <code>&lt;when&gt;</code>
-      lights up the note it speaks about.
+      The upbeat and first bar of Schumann's <em>Träumerei</em>, read from the Welte-Mignon roll
+      225. Hovering a <code>&lt;when&gt;</code> lights up the note it speaks about.
     </p>
 
     <div class="two">
       <div>
-        <h2>The document</h2>
+        <h2>Encoding</h2>
         <pre id="markup"></pre>
       </div>
       <div>
-        <h2>As played</h2>
+        <h2>Rendering</h2>
         <div class="panel" id="played"></div>
         <p class="caption">
-          Noteheads stand where they were struck, so the barline is drawn dashed and the ruler
-          below counts seconds of the recording. Ink density is velocity.
+          The rendering comes from a
+          <a href="https://github.com/pfefferniels/verovio/tree/aligned-mei">modified version of
+            verovio</a>.
         </p>
       </div>
     </div>
 
     <footer>
-      The performed layout is not part of verovio upstream. It comes from the
-      <a href="https://github.com/pfefferniels/verovio">aligned-mei branch</a> of the fork, whose
-      build is committed in this repository. The alignment itself is made in the
-      <a href="https://github.com/pfefferniels/mpm-desk">MPM Desk</a>.
+      © Niels Pfeffer
     </footer>
   </main>
 
