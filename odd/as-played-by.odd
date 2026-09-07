@@ -26,6 +26,9 @@
       <change n="1" when="2026-08-30" who="#NP">
         <desc>Creation of the initial ODD.</desc>
       </change>
+      <change n="2" when="2026-09-07" who="#NP">
+        <desc>A pedal event may carry its travel, as extData of type travel.</desc>
+      </change>
     </revisionDesc>
   </teiHeader>
   <text>
@@ -75,6 +78,18 @@
 
         <p><att>absolute</att> is restricted to whole milliseconds written with the <code>ms</code>
           unit. The same holds for <gi>extData</gi> of type <code>duration</code>.</p>
+
+        <p>A pedal event may carry the pedal's travel over the press in an <gi>extData</gi> of type
+          <code>travel</code>: pairs of a time in whole milliseconds, counted from
+          <att>absolute</att>, and a position from 0, the pedal up, to 1, the pedal fully down,
+          ascending in time. Where a pedal event carries its travel, <att>absolute</att> is the
+          moment the pedal left rest and <code>duration</code> runs until it returned there; a
+          reader that wants a switch takes the crossings of one half. Where it does not, the record
+          is the switch, and <att>absolute</att> is the moment the pedal was pressed. The travel
+          need not hold every sample the source had. A vertex wherever the position moved by more
+          than a reader would draw, and both ends of every stretch at one position, are enough to
+          redraw the line. The modelled bellows of a reproducing piano arrive this way, with the
+          relay's delay and the traversal in the line rather than thresholded away.</p>
 
         <p>The <att>type</att> of an <gi>extData</gi> is drawn from a closed list.</p>
 
@@ -234,8 +249,8 @@
                 <sch:rule context="mei:recording/mei:when[@type = 'sustain' or @type = 'soft']">
                   <sch:assert test="not(@data)">A pedal event has no @data, because it realises no
                     written note.</sch:assert>
-                  <sch:assert test="@absolute">A pedal event names the moment it was pressed in
-                    @absolute.</sch:assert>
+                  <sch:assert test="@absolute">A pedal event names in @absolute the moment it was
+                    pressed, or, where it carries its travel, the moment it left rest.</sch:assert>
                 </sch:rule>
               </constraint>
             </constraintSpec>
@@ -337,6 +352,19 @@
                     >An ornamentAnchor is a reference of the form '#id' resolving to an element of
                     this document.</sch:assert>
                 </sch:rule>
+                <sch:rule context="mei:when/mei:extData[@type = 'travel']">
+                  <sch:let name="pairs" value="tokenize(normalize-space(.), ' ')"/>
+                  <sch:assert test="parent::mei:when[@type = 'sustain' or @type = 'soft']">A travel
+                    belongs to a pedal event; a note has none.</sch:assert>
+                  <sch:assert
+                    test="matches(normalize-space(.), '^[0-9]+:(0(\.[0-9]+)?|1(\.0+)?)( [0-9]+:(0(\.[0-9]+)?|1(\.0+)?))*$')"
+                    >A travel is a list of pairs 'ms:position' separated by whitespace: the
+                    milliseconds whole and counted from @absolute, the position from 0 (up) to 1
+                    (down).</sch:assert>
+                  <sch:assert
+                    test="every $i in 1 to count($pairs) - 1 satisfies number(substring-before($pairs[$i], ':')) lt number(substring-before($pairs[$i + 1], ':'))"
+                    >The pairs of a travel ascend in time.</sch:assert>
+                </sch:rule>
                 <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
                   <sch:assert
                     test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An
@@ -369,6 +397,10 @@
                   </valItem>
                   <valItem ident="durationTicks">
                     <desc xml:lang="en">The duration in the ticks of the source recording.</desc>
+                  </valItem>
+                  <valItem ident="travel">
+                    <desc xml:lang="en">A pedal's travel over the press: pairs of milliseconds since
+                      @absolute and position from 0 (up) to 1 (down), ascending in time.</desc>
                   </valItem>
                   <valItem ident="confidence">
                     <desc xml:lang="en">How sure the aligner was of this record, from 0 to 1.</desc>

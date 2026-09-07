@@ -25,9 +25,18 @@
       <performance>
          <recording source="#take-1">
 
-            <!-- The pedal goes down before the first note and is held over the first bar. -->
+            <!-- The pedal goes down before the first note and is held over the first bar. Its
+                 travel is a Welte-Mignon's damper bellows as modelled by linked-rolls: up in
+                 190 ms, most of it in the first 100, and down again the same way. -->
             <when xml:id="w-ped" absolute="0ms" abstype="smil" type="sustain">
                <extData type="duration">1980ms</extData>
+               <extData type="travel">
+                  0:0.04 3:0.11 7:0.17 10:0.24 14:0.29 17:0.35 21:0.40 26:0.46 31:0.53 36:0.58
+                  43:0.65 50:0.70 59:0.76 70:0.82 83:0.87 103:0.93 146:0.98 191:1.00 1786:1.00
+                  1790:0.93 1794:0.86 1797:0.80 1801:0.73 1804:0.68 1808:0.62 1813:0.55 1818:0.49
+                  1823:0.43 1830:0.37 1837:0.31 1846:0.25 1855:0.20 1867:0.14 1884:0.09 1917:0.03
+                  1980:0.00
+               </extData>
             </when>
 
             <!-- A match: a written note that sounded. -->

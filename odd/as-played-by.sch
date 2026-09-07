@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schema xmlns="http://purl.oclc.org/dsdl/schematron" queryBinding="xslt2">
    <title>ISO Schematron rules</title>
-   <!-- This file generated 2026-08-30T16:06:32Z by 'extract-isosch.xsl'. -->
+   <!-- This file generated 2026-09-07T20:09:08Z by 'extract-isosch.xsl'. -->
    <!-- ********************* -->
    <!-- namespaces, declared: -->
    <!-- ********************* -->
    <ns prefix="mei" uri="http://www.music-encoding.org/ns/mei"/>
    <ns prefix="xlink" uri="http://www.w3.org/1999/xlink"/>
    <!-- ******************************************************** -->
-   <!-- constraints in en, und, mul, zxx, of which there are 201 -->
+   <!-- constraints in en, und, mul, zxx, of which there are 202 -->
    <!-- ******************************************************** -->
    <pattern id="schematron-constraint-warn_deprecated-1">
       <rule context="@artic">
@@ -549,7 +549,7 @@
    <pattern id="schematron-constraint-when-shapes-100">
       <rule context="mei:recording/mei:when[@type = 'sustain' or @type = 'soft']">
          <assert test="not(@data)">A pedal event has no @data, because it realises no written note.</assert>
-         <assert test="@absolute">A pedal event names the moment it was pressed in @absolute.</assert>
+         <assert test="@absolute">A pedal event names in @absolute the moment it was pressed, or, where it carries its travel, the moment it left rest.</assert>
       </rule>
    </pattern>
    <pattern id="schematron-constraint-when-points-into-the-score-101">
@@ -955,97 +955,105 @@
       </rule>
    </pattern>
    <pattern id="schematron-constraint-extdata-values-168">
+      <rule context="mei:when/mei:extData[@type = 'travel']">
+         <let name="pairs" value="tokenize(normalize-space(.), ' ')"/>
+         <assert test="parent::mei:when[@type = 'sustain' or @type = 'soft']">A travel belongs to a pedal event; a note has none.</assert>
+         <assert test="matches(normalize-space(.), '^[0-9]+:(0(\.[0-9]+)?|1(\.0+)?)( [0-9]+:(0(\.[0-9]+)?|1(\.0+)?))*$')">A travel is a list of pairs 'ms:position' separated by whitespace: the milliseconds whole and counted from @absolute, the position from 0 (up) to 1 (down).</assert>
+         <assert test="every $i in 1 to count($pairs) - 1 satisfies number(substring-before($pairs[$i], ':')) lt number(substring-before($pairs[$i + 1], ':'))">The pairs of a travel ascend in time.</assert>
+      </rule>
+   </pattern>
+   <pattern id="schematron-constraint-extdata-values-169">
       <rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
          <assert test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An ornamentAnchorFrom says whether the model named the anchor ('model'), whether an ornament sign in the score settled a ranking the model was unsure of ('model-and-sign'), or whether it was guessed from the timing ('timing').</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_grpSym_attributes_scoreDef-169">
+   <pattern id="schematron-constraint-check_grpSym_attributes_scoreDef-170">
       <rule context="mei:grpSym[parent::mei:scoreDef]">
          <assert test="@startid and @endid and @level">In scoreDef, grpSym must have startid, endid, and level attributes.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_grpSym_attributes_staffDef-170">
+   <pattern id="schematron-constraint-check_grpSym_attributes_staffDef-171">
       <rule context="mei:grpSym[parent::mei:staffGrp]">
          <assert test="not(@startid or @endid or @level)">In staffGrp, grpSym must not have startid, endid, or level attributes.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_keyAccidPlacement-171">
+   <pattern id="schematron-constraint-Check_keyAccidPlacement-172">
       <rule context="mei:keyAccid">
          <assert test="(@x and @y) or @pname or @loc">One of the following is required: @x and @y attribute pair, @pname attribute, or @loc attribute.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_keyAccid_oct-172">
+   <pattern id="schematron-constraint-check_keyAccid_oct-173">
       <rule context="mei:keySig[mei:keyAccid[@oct]]">
          <assert test="count(mei:keyAccid[@oct]) = count(mei:keyAccid)">If the @oct attribute appears on any keyAccid element, it must be provided on all keyAccid elements.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_keySig_editorial-173">
+   <pattern id="schematron-constraint-check_keySig_editorial-174">
       <rule context="mei:keySig/mei:*[local-name() eq 'add' or local-name() eq 'corr'             or local-name() eq 'damage' or local-name() eq 'del' or local-name() eq 'orig' or              local-name() eq 'reg' or local-name() eq 'restore' or local-name() eq 'sic' or              local-name() eq 'supplied' or local-name() eq 'unclear']">
          <assert test="count(mei:keyAccid) = count(mei:*)">Only keyAccid elements are allowed here.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_staff-174">
+   <pattern id="schematron-constraint-Check_staff-175">
       <rule context="mei:*[@staff]">
          <assert test="every $i in tokenize(normalize-space(@staff), '\s+') satisfies $i=//mei:staffDef/@n">The values in @staff must correspond to @n attribute of a staffDef element.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-music-carries-a-performance-175">
+   <pattern id="schematron-constraint-music-carries-a-performance-176">
       <rule context="mei:music">
          <assert test="mei:performance/mei:recording">An as-played-by document records at least one performance, so its music holds a performance with a recording in it.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-nameParts-176">
+   <pattern id="schematron-constraint-nameParts-177">
       <rule context="mei:name">
          <assert role="warning" test="not(mei:geogName or mei:persName or mei:corpName)">Recommended practice is to use name elements to capture sub-parts of a generic name.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-ornam_start-type_attributes_required-177">
+   <pattern id="schematron-constraint-ornam_start-type_attributes_required-178">
       <rule context="mei:ornam">
          <assert test="@startid or @tstamp or @tstamp.ges or @tstamp.real">Must have one of the attributes: startid, tstamp, tstamp.ges or tstamp.real.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-phrase_start-_and_end-type_attributes_required-178">
+   <pattern id="schematron-constraint-phrase_start-_and_end-type_attributes_required-179">
       <rule context="mei:phrase">
          <assert test="@startid or @tstamp or @tstamp.ges or @tstamp.real">Must have one of the attributes: startid, tstamp, tstamp.ges or tstamp.real.</assert>
          <assert test="@dur or @dur.ges or @endid or @tstamp2">Must have one of the attributes: dur, dur.ges, endid, or tstamp2.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-phrase_containing_curve-179">
+   <pattern id="schematron-constraint-phrase_containing_curve-180">
       <rule context="mei:phrase[mei:curve[@bezier or @bulge or @curvedir or @lform or @lwidth or @ho or              @startho or @endho or @to or @startto or @endto or @vo or @startvo or @endvo or @x or @y or @x2 or @y2]]">
          <assert test="not(@bezier or @bulge or @curvedir or @lform or @lwidth or @ho or @startho or @endho or                @to or @startto or @endto or @vo or @startvo or @endvo or @x or @y or @x2 or @y2)"
                   role="warning">The visual attributes of the phrase (@bezier, @bulge, @curvedir, @lform, @lwidth, @ho, @startho, @endho, @to, @startto, @endto, @vo, @startvo, @endvo, @x, @y, @x2, and @y2) will be overridden by visual attributes of the contained curve elements.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-FRBR_relation-180">
+   <pattern id="schematron-constraint-FRBR_relation-181">
       <rule context="mei:relationList/mei:relation[parent::mei:work or parent::mei:expression or           parent::mei:source or parent::mei:item]">
          <assert test="matches(@rel, 'hasAbridgement') or             matches(@rel, 'hasAbridgement') or             matches(@rel, 'isAbridgementOf') or             matches(@rel, 'hasAdaptation') or             matches(@rel, 'isAdaptationOf') or             matches(@rel, 'hasAlternate') or             matches(@rel, 'isAlternateOf') or             matches(@rel, 'hasArrangement') or             matches(@rel, 'isArrangementOf') or             matches(@rel, 'hasComplement') or             matches(@rel, 'isComplementOf') or             matches(@rel, 'hasEmbodiment') or             matches(@rel, 'isEmbodimentOf') or             matches(@rel, 'hasExemplar') or             matches(@rel, 'isExemplarOf') or             matches(@rel, 'hasImitation') or             matches(@rel, 'isImitationOf') or             matches(@rel, 'hasPart') or             matches(@rel, 'isPartOf') or             matches(@rel, 'hasRealization') or             matches(@rel, 'isRealizationOf') or             matches(@rel, 'hasReconfiguration') or             matches(@rel, 'isReconfigurationOf') or             matches(@rel, 'hasReproduction') or             matches(@rel, 'isReproductionOf') or             matches(@rel, 'hasRevision') or             matches(@rel, 'isRevisionOf') or             matches(@rel, 'hasSuccessor') or             matches(@rel, 'isSuccessorOf') or             matches(@rel, 'hasSummarization') or             matches(@rel, 'isSummarizationOf') or             matches(@rel, 'hasSupplement') or             matches(@rel, 'isSupplementOf') or             matches(@rel, 'hasTransformation') or             matches(@rel, 'isTransformationOf') or             matches(@rel, 'hasTranslation') or             matches(@rel, 'isTranslationOf')">Within work, expression, source, or item, the value of the rel attribute must match one of the following: hasAbridgement, isAbridgementOf, hasAdaptation, isAdaptationOf, hasAlternate, isAlternateOf, hasArrangement, isArrangementOf, hasComplement, isComplementOf, hasEmbodiment, isEmbodimentOf, hasExemplar, isExemplarOf, hasImitation, isImitationOf, hasPart, isPartOf, hasRealization, isRealizationOf, hasReconfiguration, isReconfigurationOf, hasReproduction, isReproductionOf, hasRevision, isRevisionOf, hasSuccessor, isSuccessorOf, hasSummarization, isSummarizationOf, hasSupplement, isSupplementOf, hasTransformation, isTransformationOf, hasTranslation, isTranslationOf</assert>
          <assert test="@target">Within work, expression, source or item, the target attribute must be present.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_respStmt-181">
+   <pattern id="schematron-constraint-check_respStmt-182">
       <rule context="mei:respStmt[not(ancestor::mei:change)]">
          <assert test="(mei:resp and (mei:name or mei:corpName or mei:persName)) or             count(mei:*[@role]) = count(mei:*) and count(mei:*) &gt; 0"
                   role="warning">At least one element pair (a resp element and a name-like element) is recommended. Alternatively, each name-like element may have a @role attribute.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_restline-182">
+   <pattern id="schematron-constraint-Check_restline-183">
       <rule context="mei:rest[@line]">
          <let name="thisstaff" value="ancestor::mei:staff/@n"/>
          <assert test="number(@line) &lt;= number(preceding::mei:staffDef[@n=$thisstaff and @lines][1]/@lines)">The value of @line must be less than or equal to the number of lines on the staff.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_sectionexpansion-183">
+   <pattern id="schematron-constraint-Check_sectionexpansion-184">
       <rule context="mei:section[mei:expansion]">
          <assert test="descendant::mei:section|descendant::mei:ending|descendant::mei:rdg">A section containing an expansion element must have descendant section, ending, or rdg elements.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-checkStaff_n-184">
+   <pattern id="schematron-constraint-checkStaff_n-185">
       <rule context="mei:staff[@n]">
          <let name="thisstaff" value="@n"/>
          <assert test="preceding::mei:staffDef[@n=$thisstaff] or preceding::mei:staff[@n=$thisstaff]/mei:staffDef or mei:staffDef">There must be a preceding staffDef with a matching value of @n, a preceding staff with a matching @n value containing a staffDef, or a staffDef child element.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_staffDefn-185">
+   <pattern id="schematron-constraint-Check_staffDefn-186">
       <rule context="mei:staffDef[not(ancestor::mei:staff)]">
          <let name="thisstaff" value="@n"/>
          <assert test="@n">StaffDef must have an n attribute.</assert>
@@ -1053,24 +1061,24 @@
          <assert test="count(mei:clef) + count(mei:clefGrp) &lt; 2">Only one clef or clefGrp is permitted.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_ancestor_staff-186">
+   <pattern id="schematron-constraint-Check_ancestor_staff-187">
       <rule context="mei:staffDef[ancestor::mei:staff and @n]">
          <let name="thisstaff" value="@n"/>
          <assert test="ancestor::mei:staff/@n eq $thisstaff">@n must have the same value as the current staff.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_ancestor_staff_lines-187">
+   <pattern id="schematron-constraint-Check_ancestor_staff_lines-188">
       <rule context="mei:staffDef[ancestor::mei:staff and not(@n)]">
          <let name="thisstaff" value="ancestor::mei:staff/@n"/>
          <assert test="@lines or preceding::mei:staffDef[@n=$thisstaff and @lines]"> Either @lines must be present or a preceding staffDef with matching @n value and @lines must exist.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_clef_position_staffDef-188">
+   <pattern id="schematron-constraint-Check_clef_position_staffDef-189">
       <rule context="mei:staffDef[@clef.line and @lines]">
          <assert test="number(@clef.line) &lt;= number(@lines)">The clef position must be less than or equal to the number of lines on the staff.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_clef_position_staffDef_nolines-189">
+   <pattern id="schematron-constraint-Check_clef_position_staffDef_nolines-190">
       <rule context="mei:staffDef[@clef.line and not(@lines)]">
          <let name="thisstaff" value="@n"/>
          <let name="stafflines"
@@ -1078,14 +1086,14 @@
          <assert test="number(@clef.line) &lt;= number($stafflines)">The clef position must be less than or equal to the number of lines on the staff.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_tab_strings_lines-190">
+   <pattern id="schematron-constraint-Check_tab_strings_lines-191">
       <rule context="mei:staffDef[@tab.strings and @lines]">
          <let name="countTokens"
                value="count(tokenize(normalize-space(@tab.strings), '\s'))"/>
          <assert test="$countTokens = @lines">The tab.strings attribute must have the same number of values as there are staff lines.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_tab_strings_nolines-191">
+   <pattern id="schematron-constraint-Check_tab_strings_nolines-192">
       <rule context="mei:staffDef[@tab.strings and not(@lines)]">
          <let name="countTokens"
                value="count(tokenize(normalize-space(@tab.strings), '\s'))"/>
@@ -1120,7 +1128,7 @@
          <assert test="($scorePPQ mod $staffPPQ) = 0">The value of ppq must be a factor of the value of ppq on a preceding scoreDef.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_staffGrp_unique_staff_n_values-196">
+   <pattern id="schematron-constraint-Check_staffGrp_unique_staff_n_values-197">
       <rule context="mei:staffGrp">
          <let name="countstaves" value="count(descendant::mei:staffDef)"/>
          <let name="countuniqstaves"
@@ -1128,33 +1136,33 @@
          <assert test="$countstaves eq $countuniqstaves">Each staffDef must have a unique value for the n attribute.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-symbolDef_symbol_attributes_required-197">
+   <pattern id="schematron-constraint-symbolDef_symbol_attributes_required-198">
       <rule context="mei:symbol[ancestor::mei:symbolDef]">
          <assert test="@startid or (@x and @y)">In the symbolDef context, symbol must have either a startid attribute or x and y attributes.</assert>
          <assert test="@altsym or @glyph.name or @glyph.num">In the symbolDef context, symbol must have one of the following attributes: altsym, glyph.name, or glyph.num.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-tempo_in_header_disallow_most_attrs-198">
+   <pattern id="schematron-constraint-tempo_in_header_disallow_most_attrs-199">
       <rule context="mei:tempo[not(ancestor::mei:score or ancestor::mei:part)]">
          <assert test="not(@*[name() != 'analog' and name() != 'class' and name() != 'label' and name() != 'mm' and name() != 'mm.dots' and name() != 'translit' and name() != 'type' and name() != 'mm.unit' and name() != 'n' and name() != 'xml:base' and name() != 'xml:id' and name() != 'xml:lang'])">Only analog, class, label, mm, mm.dots, mm.unit, n, translit, type, xml:base, xml:id, and xml:lang attributes are allowed when tempo is not a descendant of a score or part.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-tempo_start-type_attributes_required-199">
+   <pattern id="schematron-constraint-tempo_start-type_attributes_required-200">
       <rule context="mei:tempo[not(ancestor::mei:syllable) and not(ancestor::mei:work) and not(ancestor::mei:expression) and not(count(ancestor::mei:*) = 0)]">
          <assert test="@startid or @tstamp or @tstamp.ges or @tstamp.real">Must have one of the attributes: startid, tstamp, tstamp.ges or tstamp.real.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-Check_term_dataTarget-200">
+   <pattern id="schematron-constraint-Check_term_dataTarget-201">
       <rule context="mei:term[@data]">
          <assert test="ancestor::mei:classification">The @data attribute may only occur on a term which is a descendant of a classification element.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-list_type_constraint-201">
+   <pattern id="schematron-constraint-list_type_constraint-202">
       <rule context="mei:list[contains(@type,'gloss')]">
          <assert test="count(mei:label) = count(mei:li)">In a list of type "gloss" all items must be immediately preceded by a label.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_altsymTarget-202">
+   <pattern id="schematron-constraint-check_altsymTarget-203">
       <rule context="@altsym">
          <assert role="warning" test="not(normalize-space(.) eq '')">@altsym attribute should have content.</assert>
          <assert role="warning"
@@ -1162,26 +1170,26 @@
          <assert test="not(substring(., 2) eq ancestor::mei:symbolDef/@xml:id)">The value in @altsym must not correspond to the @xml:id attribute of a symbolDef ancestor.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-symbolDef_curve_attributes_required-203">
+   <pattern id="schematron-constraint-symbolDef_curve_attributes_required-204">
       <rule context="mei:curve[ancestor::mei:symbolDef]">
          <assert test="@startid or (@x and @y)">In the symbolDef context, curve must have either a startid attribute or x and y attributes.</assert>
          <assert test="@endid or (@x2 and @y2)">In the symbolDef context, curve must have either an endid attribute or both x2 and y2 attributes.</assert>
          <assert test="@bezier or @bulge">In the symbolDef context, curve must have either a bezier or bulge attribute.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-line_start-_and_end-type_attributes_required-204">
+   <pattern id="schematron-constraint-line_start-_and_end-type_attributes_required-205">
       <rule context="mei:line[ancestor::mei:symbolDef]">
          <assert test="@startid or (@x and @y)">When used in the symbolDef context, must have either a startid attribute or x and y attributes.</assert>
          <assert test="@endid or (@x2 and @y2)">When used in the symbolDef context, must have either an endid attribute or both x2 and y2 attributes.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-line_start-_and_end-type_attributes_required-205">
+   <pattern id="schematron-constraint-line_start-_and_end-type_attributes_required-206">
       <rule context="mei:line[not(ancestor::mei:symbolDef)]">
          <assert test="@startid or @tstamp or @tstamp.ges or @tstamp.real or (@x and @y)">When used in the score context, must have a startid, tstamp, tstamp.ges or tstamp.real attribute or both x and y attributes.</assert>
          <assert test="@dur or @dur.ges or @endid or @tstamp2 or (@x2 and @y2)">When used in the score context, must have an endid, dur, dur.ges, or tstamp2 attribute or both x2 and y2 attributes.</assert>
       </rule>
    </pattern>
-   <pattern id="schematron-constraint-check_beams.floating-206">
+   <pattern id="schematron-constraint-check_beams.floating-207">
       <rule context="mei:fTrem[@beams and @beams.float]">
          <assert test="@beams.float &lt;= @beams">The number of floating beams must be less than or equal to the total number of beams.</assert>
       </rule>

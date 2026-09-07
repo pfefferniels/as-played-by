@@ -20,16 +20,21 @@ A `<when>` in a `<recording>` takes one of five shapes, told apart by `@type` an
 | `deletion` | yes | no | a written note that was not played |
 | `insertion` | no | yes | a note that sounded without being written |
 | `substitution` | yes | yes | a written note that sounded at another pitch |
-| `sustain`, `soft` | no | yes | a pedal press |
+| `sustain`, `soft` | no | yes | a pedal press, with or without its travel |
 
 `@data` points at the `xml:id` of a written note. `@absolute` is the moment it sounded, in whole
 milliseconds, with `@abstype="smil"`.
 
 Everything else a record carries is an `<extData>` child, whose `@type` is drawn from a closed
-list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `confidence`,
-`reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
+list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `travel`,
+`confidence`, `reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
 `ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. For further reference see
 the [ODD](odd/as-played-by.odd).
+
+A pedal press may carry its `travel`: pairs `ms:position`, the milliseconds counted from
+`@absolute`, the position from 0 (up) to 1 (down), ascending in time. With a travel, `@absolute` is
+where the pedal left rest and `duration` runs until it returned there. Without one, the press is a
+switch and `@absolute` is the moment it was pressed.
 
 ## Checking a document
 
