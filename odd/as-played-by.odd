@@ -13,7 +13,7 @@
         </respStmt>
       </titleStmt>
       <editionStmt>
-        <edition n="0.1">Version 0.1</edition>
+        <edition n="0.2">Version 0.2</edition>
       </editionStmt>
       <publicationStmt>
         <p>Published under the same terms as MEI itself.</p>
@@ -28,6 +28,11 @@
       </change>
       <change n="2" when="2026-09-07" who="#NP">
         <desc>A pedal event may carry its travel, as extData of type travel.</desc>
+      </change>
+      <change n="3" when="2026-11-15" who="#NP">
+        <desc>A when is a note that sounded or a pedal press. Deletions, insertions and
+          substitutions are no longer recorded, and several whens on one note are that note played
+          as an ornament.</desc>
       </change>
     </revisionDesc>
   </teiHeader>
@@ -68,13 +73,27 @@
       <div>
         <head>What is narrowed</head>
 
-        <p>A <gi>when</gi> in a <gi>recording</gi> takes one of five shapes, told apart by
-          <att>type</att> and by which of <att>data</att> and <att>absolute</att> are present. A
-          match has both, because there is a written note and a moment it sounded at. A deletion has
-          only <att>data</att>, because the note was never played. An insertion has only
-          <att>absolute</att>, because something sounded that the score does not write. A
-          substitution has both and sounds at a pitch the score does not give. A pedal event has
-          only a moment.</p>
+        <p>A <gi>when</gi> in a <gi>recording</gi> is one of two things, told apart by
+          <att>type</att>: a note that sounded, or a pedal press. A note that sounded is a match. It
+          names the written note in <att>data</att> and the moment it sounded in
+          <att>absolute</att>, and it needs both. A pedal event has only a moment.</p>
+
+        <p>There is no record of a note that sounded without being written, of a written note that
+          was not played, or of one played at another pitch. Such a difference is written into the
+          score, as a reading beside the one the source has, and the recording points at the notes
+          of that reading. A written note that no <gi>when</gi> of a recording points at was not
+          played in it.</p>
+
+        <p>An ornament is the one place where written and sounded notes do not stand one to one.
+          Where several <gi>when</gi> elements of a recording point at the same note, that note was
+          played as an ornament: a trill, a turn, a mordent, whatever the score writes as one note
+          and a sign. Each of them states the pitch that sounded in an <gi>extData</gi> of type
+          <code>pitch</code>, since the note gives only its own. Their order is the order of their
+          <att>absolute</att>, and the written note falls where the earliest of them does. A
+          <gi>when</gi> that is alone on its note states no pitch. The sign belongs to the score:
+          where the source has none, it is written into a reading like any other difference. The
+          records hold what an MPM ornament is made from: the note it stands on and the notes played
+          for it, in order, each with its pitch, its moment, its length and its velocity.</p>
 
         <p><att>absolute</att> is restricted to whole milliseconds written with the <code>ms</code>
           unit. The same holds for <gi>extData</gi> of type <code>duration</code>.</p>
@@ -219,32 +238,11 @@
             <constraintSpec ident="when-shapes" scheme="schematron" mode="add">
               <constraint>
                 <sch:rule context="mei:recording/mei:when[@type = 'match']">
-                  <sch:assert test="@data">A match names the written note in @data.</sch:assert>
-                  <sch:assert test="@absolute">A match names the moment it sounded in
-                    @absolute.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:recording/mei:when[@type = 'deletion']">
-                  <sch:assert test="@data">A deletion names the written note in @data.</sch:assert>
-                  <sch:assert test="not(@absolute)">A deletion has no @absolute, because the note
-                    was never played.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:recording/mei:when[@type = 'insertion']">
-                  <sch:assert test="not(@data)">An insertion has no @data, because there is no
-                    written note for it to point at.</sch:assert>
-                  <sch:assert test="@absolute">An insertion names the moment it sounded in
-                    @absolute.</sch:assert>
-                  <sch:assert test="mei:extData[@type = 'pitch']">An insertion carries the pitch
-                    that sounded in extData of type 'pitch', since the score does not give
-                    it.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:recording/mei:when[@type = 'substitution']">
-                  <sch:assert test="@data">A substitution names the written note in
-                    @data.</sch:assert>
-                  <sch:assert test="@absolute">A substitution names the moment it sounded in
-                    @absolute.</sch:assert>
-                  <sch:assert test="mei:extData[@type = 'pitch']">A substitution carries the pitch
-                    that sounded in extData of type 'pitch', which is what makes it a substitution
-                    rather than a match.</sch:assert>
+                  <sch:assert test="@data">A match names the written note in @data. A note that
+                    sounded without being written is written into the score first, as a
+                    reading.</sch:assert>
+                  <sch:assert test="@absolute">A match names the moment it sounded in @absolute. A
+                    written note that was not played has no when.</sch:assert>
                 </sch:rule>
                 <sch:rule context="mei:recording/mei:when[@type = 'sustain' or @type = 'soft']">
                   <sch:assert test="not(@data)">A pedal event has no @data, because it realises no
@@ -255,13 +253,29 @@
               </constraint>
             </constraintSpec>
 
-            <constraintSpec ident="when-points-into-the-score" scheme="schematron" mode="add">
+            <constraintSpec ident="when-points-at-a-note" scheme="schematron" mode="add">
               <constraint>
                 <sch:rule context="mei:recording/mei:when[@data]">
                   <sch:assert
-                    test="starts-with(@data, '#') and //*[@xml:id = substring-after(current()/@data, '#')]"
-                    >The @data of a when must be a reference of the form '#id' resolving to an
-                    element of this document.</sch:assert>
+                    test="starts-with(@data, '#') and //mei:note[@xml:id = substring-after(current()/@data, '#')]"
+                    >The @data of a when must be a reference of the form '#id' resolving to a note
+                    of this document.</sch:assert>
+                </sch:rule>
+              </constraint>
+            </constraintSpec>
+
+            <constraintSpec ident="when-ornaments-state-their-pitches" scheme="schematron"
+              mode="add">
+              <constraint>
+                <sch:rule context="mei:recording/mei:when[@type = 'match'][@data]">
+                  <sch:let name="together" value="count(../mei:when[@data = current()/@data])"/>
+                  <sch:assert test="$together = 1 or mei:extData[@type = 'pitch']">Several whens of
+                    this recording point at the same note, so the note was played as an ornament,
+                    and each of them states the pitch that sounded in extData of type
+                    'pitch'.</sch:assert>
+                  <sch:assert test="$together gt 1 or not(mei:extData[@type = 'pitch'])">A when that
+                    is alone on its note states no pitch, because the note gives it. A note played
+                    at another pitch is written into the score as a reading.</sch:assert>
                 </sch:rule>
               </constraint>
             </constraintSpec>
@@ -279,37 +293,14 @@
               </constraint>
             </constraintSpec>
 
-            <constraintSpec ident="when-ornament-fields-belong-together" scheme="schematron"
-              mode="add">
-              <constraint>
-                <sch:rule context="mei:recording/mei:when">
-                  <sch:assert
-                    test="not(mei:extData[@type = 'ornamentAnchorConfidence']) or mei:extData[@type = 'ornamentAnchorConfidenceOf']"
-                    >An ornamentAnchorConfidence is written together with an
-                    ornamentAnchorConfidenceOf naming which quantity it holds. An unlabelled number
-                    cannot be compared across files.</sch:assert>
-                  <sch:assert
-                    test="not(mei:extData[@type = 'ornamentAnchorFrom' or @type = 'ornamentAnchorConfidence' or @type = 'ornamentSlot']) or mei:extData[@type = 'ornamentAnchor']"
-                    >The ornament fields describe an anchor, so they require an ornamentAnchor to
-                    describe.</sch:assert>
-                </sch:rule>
-              </constraint>
-            </constraintSpec>
             <attList>
               <attDef ident="type" mode="change" usage="req">
-                <desc xml:lang="en">Which of the five shapes this record takes.</desc>
+                <desc xml:lang="en">Whether this record is a note that sounded or a pedal
+                  press.</desc>
                 <valList type="closed" mode="replace">
                   <valItem ident="match">
-                    <desc xml:lang="en">A written note that sounded.</desc>
-                  </valItem>
-                  <valItem ident="deletion">
-                    <desc xml:lang="en">A written note that was not played.</desc>
-                  </valItem>
-                  <valItem ident="insertion">
-                    <desc xml:lang="en">A note that sounded without being written.</desc>
-                  </valItem>
-                  <valItem ident="substitution">
-                    <desc xml:lang="en">A written note that sounded at another pitch.</desc>
+                    <desc xml:lang="en">A written note that sounded. Several on one note are that
+                      note played as an ornament.</desc>
                   </valItem>
                   <valItem ident="sustain">
                     <desc xml:lang="en">A press of the sustaining pedal.</desc>
@@ -326,8 +317,7 @@
 
             <constraintSpec ident="extdata-values" scheme="schematron" mode="add">
               <constraint>
-                <sch:rule
-                  context="mei:when/mei:extData[@type = 'velocity' or @type = 'pitch' or @type = 'writtenPitch']">
+                <sch:rule context="mei:when/mei:extData[@type = 'velocity' or @type = 'pitch']">
                   <sch:assert test="matches(normalize-space(.), '^(1[01][0-9]|12[0-7]|[0-9]{1,2})$')"
                     >A velocity or a pitch is a whole number from 0 to 127.</sch:assert>
                 </sch:rule>
@@ -337,20 +327,9 @@
                     @absolute.</sch:assert>
                 </sch:rule>
                 <sch:rule
-                  context="mei:when/mei:extData[@type = 'onsetTicks' or @type = 'durationTicks' or @type = 'ornamentSlot']">
-                  <sch:assert test="matches(normalize-space(.), '^[0-9]+$')">A tick count and an
-                    ornament slot are whole numbers.</sch:assert>
-                </sch:rule>
-                <sch:rule
-                  context="mei:when/mei:extData[@type = 'confidence' or @type = 'ornamentAnchorConfidence']">
-                  <sch:assert test="matches(normalize-space(.), '^(0(\.[0-9]+)?|1(\.0+)?)$')">A
-                    confidence is a number from 0 to 1.</sch:assert>
-                </sch:rule>
-                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchor']">
-                  <sch:assert
-                    test="starts-with(normalize-space(.), '#') and //*[@xml:id = substring-after(normalize-space(current()), '#')]"
-                    >An ornamentAnchor is a reference of the form '#id' resolving to an element of
-                    this document.</sch:assert>
+                  context="mei:when/mei:extData[@type = 'onsetTicks' or @type = 'durationTicks']">
+                  <sch:assert test="matches(normalize-space(.), '^[0-9]+$')">A tick count is a whole
+                    number.</sch:assert>
                 </sch:rule>
                 <sch:rule context="mei:when/mei:extData[@type = 'travel']">
                   <sch:let name="pairs" value="tokenize(normalize-space(.), ' ')"/>
@@ -365,19 +344,11 @@
                     test="every $i in 1 to count($pairs) - 1 satisfies number(substring-before($pairs[$i], ':')) lt number(substring-before($pairs[$i + 1], ':'))"
                     >The pairs of a travel ascend in time.</sch:assert>
                 </sch:rule>
-                <sch:rule context="mei:when/mei:extData[@type = 'ornamentAnchorFrom']">
-                  <sch:assert
-                    test="normalize-space(.) = ('model', 'model-and-sign', 'timing')">An
-                    ornamentAnchorFrom says whether the model named the anchor ('model'), whether an
-                    ornament sign in the score settled a ranking the model was unsure of
-                    ('model-and-sign'), or whether it was guessed from the timing
-                    ('timing').</sch:assert>
-                </sch:rule>
               </constraint>
             </constraintSpec>
             <attList>
               <attDef ident="type" mode="change" usage="req">
-                <desc xml:lang="en">Which measurement or judgement this datum holds.</desc>
+                <desc xml:lang="en">Which measurement this datum holds.</desc>
                 <valList type="closed" mode="replace">
                   <valItem ident="velocity">
                     <desc xml:lang="en">MIDI velocity, 0 to 127.</desc>
@@ -386,11 +357,8 @@
                     <desc xml:lang="en">How long the note sounded, in whole milliseconds.</desc>
                   </valItem>
                   <valItem ident="pitch">
-                    <desc xml:lang="en">The MIDI pitch that sounded.</desc>
-                  </valItem>
-                  <valItem ident="writtenPitch">
-                    <desc xml:lang="en">The MIDI pitch the score writes, where another
-                      sounded.</desc>
+                    <desc xml:lang="en">The MIDI pitch that sounded, for a note of an
+                      ornament.</desc>
                   </valItem>
                   <valItem ident="onsetTicks">
                     <desc xml:lang="en">The onset in the ticks of the source recording.</desc>
@@ -401,33 +369,6 @@
                   <valItem ident="travel">
                     <desc xml:lang="en">A pedal's travel over the press: pairs of milliseconds since
                       @absolute and position from 0 (up) to 1 (down), ascending in time.</desc>
-                  </valItem>
-                  <valItem ident="confidence">
-                    <desc xml:lang="en">How sure the aligner was of this record, from 0 to 1.</desc>
-                  </valItem>
-                  <valItem ident="reading">
-                    <desc xml:lang="en">What a reader made of the divergence.</desc>
-                  </valItem>
-                  <valItem ident="resp">
-                    <desc xml:lang="en">Who is responsible for that reading.</desc>
-                  </valItem>
-                  <valItem ident="certainty">
-                    <desc xml:lang="en">How sure that reader was.</desc>
-                  </valItem>
-                  <valItem ident="ornamentAnchor">
-                    <desc xml:lang="en">The written note this sounded note decorates.</desc>
-                  </valItem>
-                  <valItem ident="ornamentAnchorFrom">
-                    <desc xml:lang="en">How the anchor was arrived at.</desc>
-                  </valItem>
-                  <valItem ident="ornamentAnchorConfidence">
-                    <desc xml:lang="en">How sure the anchor is, from 0 to 1.</desc>
-                  </valItem>
-                  <valItem ident="ornamentAnchorConfidenceOf">
-                    <desc xml:lang="en">Which quantity that confidence holds.</desc>
-                  </valItem>
-                  <valItem ident="ornamentSlot">
-                    <desc xml:lang="en">Where this note falls within its ornament.</desc>
                   </valItem>
                 </valList>
               </attDef>

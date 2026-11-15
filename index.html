@@ -206,7 +206,7 @@
       let read = 0;
       for (const match of mei.matchAll(/<when\b[\s\S]*?(?:\/>|<\/when>)/g)) {
         pieces.push(escaped(mei.slice(read, match.index)));
-        const target = match[0].match(/(?:\bdata="#|ornamentAnchor">#)([^"<]+)/);
+        const target = match[0].match(/\bdata="#([^"]+)/);
         pieces.push(
           `<span class="when"${target ? ` data-target="${target[1]}"` : ''}>${escaped(match[0])}</span>`
         );

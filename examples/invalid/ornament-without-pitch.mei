@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The quantity behind ornamentAnchorConfidence has changed meaning once already, so the number is only comparable across files when ornamentAnchorConfidenceOf names it. -->
+<!-- Two whens on one note are that note played as an ornament, and the note gives only its own pitch. So each of them says what sounded. -->
 <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
    <meiHead>
       <fileDesc>
          <titleStmt>
-            <title>An ornament confidence without its label</title>
+            <title>A note of an ornament that does not say its pitch</title>
          </titleStmt>
          <pubStmt/>
       </fileDesc>
@@ -19,10 +19,16 @@
    <music>
       <performance>
          <recording source="#take-1">
-            <when xml:id="w-1" absolute="0ms" abstype="smil" corresp="ev-0001" type="insertion">
-               <extData type="pitch">64</extData>
-               <extData type="ornamentAnchor">#n-1</extData>
-               <extData type="ornamentAnchorConfidence">0.87</extData>
+            <when xml:id="w-1" absolute="0ms" abstype="smil" corresp="ev-0001" data="#n-1"
+               type="match">
+               <extData type="pitch">60</extData>
+               <extData type="velocity">64</extData>
+               <extData type="duration">40ms</extData>
+            </when>
+            <when xml:id="w-2" absolute="45ms" abstype="smil" corresp="ev-0002" data="#n-1"
+               type="match">
+               <extData type="velocity">52</extData>
+               <extData type="duration">40ms</extData>
             </when>
          </recording>
       </performance>
@@ -41,6 +47,7 @@
                            <note xml:id="n-1" pname="c" oct="4" dur="4"/>
                         </layer>
                      </staff>
+                     <trill xml:id="t-1" startid="#n-1"/>
                   </measure>
                </section>
             </score>

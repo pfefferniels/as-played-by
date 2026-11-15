@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- A deletion records a written note that was never played, so it cannot also carry the moment it sounded at. -->
+<!-- One when on one note is that note, at the pitch the score writes. A note played at another pitch is written into the score as a reading. -->
 <mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
    <meiHead>
       <fileDesc>
          <titleStmt>
-            <title>A deletion that claims a moment</title>
+            <title>A pitch on a note that was not played as an ornament</title>
          </titleStmt>
          <pubStmt/>
       </fileDesc>
@@ -19,7 +19,12 @@
    <music>
       <performance>
          <recording source="#take-1">
-            <when xml:id="w-1" absolute="0ms" abstype="smil" data="#n-1" type="deletion"/>
+            <when xml:id="w-1" absolute="0ms" abstype="smil" corresp="ev-0001" data="#n-1"
+               type="match">
+               <extData type="pitch">61</extData>
+               <extData type="velocity">64</extData>
+               <extData type="duration">470ms</extData>
+            </when>
          </recording>
       </performance>
       <body>

@@ -11,25 +11,29 @@ For an example encoding see [here](https://pfefferniels.github.io/as-played-by/)
 
 ## Encoding
 
-A `<when>` in a `<recording>` takes one of five shapes, told apart by `@type` and by which of
-`@data` and `@absolute` are present.
+A `<when>` in a `<recording>` is a note that sounded or a pedal press, told apart by `@type`.
 
 | `@type` | `@data` | `@absolute` | |
 |---|---|---|---|
 | `match` | yes | yes | a written note that sounded |
-| `deletion` | yes | no | a written note that was not played |
-| `insertion` | no | yes | a note that sounded without being written |
-| `substitution` | yes | yes | a written note that sounded at another pitch |
 | `sustain`, `soft` | no | yes | a pedal press, with or without its travel |
 
 `@data` points at the `xml:id` of a written note. `@absolute` is the moment it sounded, in whole
 milliseconds, with `@abstype="smil"`.
 
+There is no record of a note that sounded without being written, of a written note that was not
+played, or of one played at another pitch. Such a difference is written into the score, as a
+reading beside the one the source has, and the recording points at the notes of that reading. A
+written note that no `<when>` points at was not played.
+
+Where several `<when>` elements of a recording point at the same note, that note was played as an
+ornament. Each of them states the pitch that sounded in `<extData type="pitch">`, their order is
+the order of `@absolute`, and the written note falls where the earliest of them does. A `<when>`
+that is alone on its note states no pitch.
+
 Everything else a record carries is an `<extData>` child, whose `@type` is drawn from a closed
-list: `velocity`, `duration`, `pitch`, `writtenPitch`, `onsetTicks`, `durationTicks`, `travel`,
-`confidence`, `reading`, `resp`, `certainty`, `ornamentAnchor`, `ornamentAnchorFrom`,
-`ornamentAnchorConfidence`, `ornamentAnchorConfidenceOf`, `ornamentSlot`. For further reference see
-the [ODD](odd/as-played-by.odd).
+list: `velocity`, `duration`, `pitch`, `onsetTicks`, `durationTicks`, `travel`. For further
+reference see the [ODD](odd/as-played-by.odd).
 
 A pedal press may carry its `travel`: pairs `ms:position`, the milliseconds counted from
 `@absolute`, the position from 0 (up) to 1 (down), ascending in time. With a travel, `@absolute` is
